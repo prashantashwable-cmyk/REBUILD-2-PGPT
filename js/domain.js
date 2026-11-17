@@ -143,7 +143,7 @@
     token: 10000, arrivalPct: 70, cabinPct: 20,
     installDays: 14, warrantyMonths: 12, amcVisits: 4, validityDays: 30,
     tolWidth: 1500, tolDepth: 1500, tolPit: 1200, tolHead: 3800,
-    dailySafety: 1, permitGate: 1, licenceGate: 1, escalateDays: 2, slaTicketHours: 24, amcPrice: 15000,
+    dailySafety: 1, permitGate: 1, licenceGate: 1, escalateDays: 2, paySopStep: 1000, payAmcVisit: 500, payQcInspection: 1500, slaTicketHours: 24, amcPrice: 15000,
     payUpi: '', payName: '', officePhone: ''
   };
   /* the lowest and highest value each rule may take (checked by the rule, not only the input box) */
@@ -152,7 +152,7 @@
     cap4: [0, 5e6], cap6: [0, 5e6], cap8: [0, 5e6], cap10: [0, 5e6], cap13: [0, 5e6], costArd: [0, 5e6], costCurtain: [0, 5e6], costPremium: [0, 5e6],
     install: [0, 5e6], transport: [0, 5e6], gst: [0, 28], targetMargin: [1, 90], salesDiscountLimit: [0, 50], adminDiscountLimit: [0, 50], minMargin: [0, 90],
     token: [0, 500000], arrivalPct: [0, 100], cabinPct: [0, 100], installDays: [1, 180], warrantyMonths: [0, 120], amcVisits: [0, 24], validityDays: [1, 365],
-    tolWidth: [300, 10000], tolDepth: [300, 10000], tolPit: [300, 10000], tolHead: [300, 10000], dailySafety: [0, 1], permitGate: [0, 1], licenceGate: [0, 1], escalateDays: [1, 30], slaTicketHours: [1, 720], amcPrice: [0, 2e6]
+    tolWidth: [300, 10000], tolDepth: [300, 10000], tolPit: [300, 10000], tolHead: [300, 10000], dailySafety: [0, 1], permitGate: [0, 1], licenceGate: [0, 1], paySopStep: [0, 100000], payAmcVisit: [0, 100000], payQcInspection: [0, 100000], escalateDays: [1, 30], slaTicketHours: [1, 720], amcPrice: [0, 2e6]
   };
   const TEXT_CFG = { payUpi: /^$|^[\w.\-]{2,}@[a-zA-Z]{2,}$/, payName: /^[^<>]{0,60}$/, officePhone: /^$|^[6-9]\d{9}$/ };
   const RULE_GROUPS = {
@@ -161,6 +161,7 @@
     payments: ['token', 'arrivalPct', 'cabinPct', 'payUpi', 'payName'],
     work: ['installDays', 'validityDays', 'dailySafety', 'escalateDays'],
     statutory: ['permitGate', 'licenceGate'],
+    workpay: ['paySopStep', 'payAmcVisit', 'payQcInspection'],
     quality: ['tolWidth', 'tolDepth', 'tolPit', 'tolHead'],
     service: ['warrantyMonths', 'amcVisits', 'amcPrice', 'slaTicketHours', 'officePhone']
   };
@@ -245,7 +246,7 @@
   const nextAmc = P => amcDue(P).find(v => !v.visit) || null;
 
   /* ---------- state ---------- */
-  const initState = () => ({ org: null, config: clone(DEFAULT_CONFIG), users: {}, projects: {}, log: [] });
+  const initState = () => ({ org: null, config: clone(DEFAULT_CONFIG), users: {}, projects: {}, pay: {}, log: [] });
   const newProject = (id, ev) => ({
     id, t: ev.t, createdBy: ev.by, stage: 'new', since: ev.t, lead: {}, sales: '', qc: '', tech: '', supplier: '', customer: '',
     req: null, quotes: [], agreement: null, schedule: null, payments: [], prep: {}, qcSite: [], corrections: [], po: null,
@@ -560,7 +561,7 @@
         const d = ev.d, c = S.config, low = QC_SITE_MEAS.filter(m => +d.meas[m] < +c[{ width: 'tolWidth', depth: 'tolDepth', pit: 'tolPit', head: 'tolHead' }[m]]);
         const fails = QC_SITE_CHECKS.filter(k => d.checks[k] === 'fail');
         const ok = !fails.length && !low.length;
-        P.qcSite.push({ checks: d.checks, meas: d.meas, low, photos: d.photos, note: str(d.note), outcome: ok ? 'approved' : 'fix', t: ev.t, by: ev.by });
+        P.qcSite.push({ checks: d.checks, meas: d.meas, low, photos: d.photos, note: str(d.note), outcome: ok ? 'approved' : 'fix', t: ev.t, by: ev.by, pay: +c.payQcInspection || 0 });
         if (ok) { setStage(P, 'site_ok', ev); return; }
         fails.forEach((k, i) => P.corrections.push({ id: ev.id + 's' + i, scope: 'site', k: 'qcs_fix_' + k, t: ev.t, done: null }));
         low.forEach((k, i) => P.corrections.push({ id: ev.id + 'm' + i, scope: 'site', k: 'meas_fix_' + k, v: { n: c[{ width: 'tolWidth', depth: 'tolDepth', pit: 'tolPit', head: 'tolHead' }[k]] }, t: ev.t, done: null }));
@@ -647,7 +648,7 @@
         if (r) { const v = +d.reading; if (String(d.reading == null ? '' : d.reading).trim() === '' || !isFinite(v) || v < r.min || v > r.max) return E('err_reading', { a: r.min, b: r.max, u: r.unit }); }
         return null;
       },
-      apply: (S, ev, P) => { P.sop[ev.d.i] = { t: ev.t, by: ev.by, photo: ev.d.photo, note: str(ev.d.note), reading: SOP_READ[ev.d.i] ? +ev.d.reading : undefined }; }
+      apply: (S, ev, P) => { P.sop[ev.d.i] = { t: ev.t, by: ev.by, photo: ev.d.photo, note: str(ev.d.note), reading: SOP_READ[ev.d.i] ? +ev.d.reading : undefined, pay: +S.config.paySopStep || 0 }; }
     },
     INSPECT_REQUEST: {
       roles: ['tech'], stages: ['installing', 'install_fix'], who: 'tech',
@@ -659,7 +660,7 @@
       check: (S, d) => (!QC_FINAL_CHECKS.every(k => ['pass', 'fail'].includes((d.checks || {})[k])) ? 'err_all_checks' : !photos(d.photos) ? 'err_photo' : null),
       apply: (S, ev, P) => {
         const fails = QC_FINAL_CHECKS.filter(k => ev.d.checks[k] === 'fail');
-        P.qcFinal.push({ checks: ev.d.checks, photos: ev.d.photos, note: str(ev.d.note), outcome: fails.length ? 'fix' : 'passed', t: ev.t, by: ev.by });
+        P.qcFinal.push({ checks: ev.d.checks, photos: ev.d.photos, note: str(ev.d.note), outcome: fails.length ? 'fix' : 'passed', t: ev.t, by: ev.by, pay: +S.config.payQcInspection || 0 });
         if (!fails.length) { setStage(P, P.schedule && P.schedule.final > 0 ? 'final_pay' : 'handover', ev); return; }
         fails.forEach((k, i) => P.corrections.push({ id: ev.id + 'f' + i, scope: 'install', k: 'qcf_fix_' + k, t: ev.t, done: null }));
         setStage(P, 'install_fix', ev);
@@ -692,7 +693,7 @@
       roles: ['tech', 'qc'], stages: ['amc'],
       guard: (S, u, P) => (!nextAmc(P) ? 'err_no_visit_due' : null),
       check: (S, d) => (!AMC_CHECKS.every(k => ['pass', 'fail'].includes((d.checks || {})[k])) ? 'err_all_checks' : !d.photo ? 'err_photo' : null),
-      apply: (S, ev, P) => { P.amc.visits.push({ t: ev.t, by: ev.by, checks: ev.d.checks, photo: ev.d.photo, note: str(ev.d.note) }); }
+      apply: (S, ev, P) => { P.amc.visits.push({ t: ev.t, by: ev.by, checks: ev.d.checks, photo: ev.d.photo, note: str(ev.d.note), pay: +S.config.payAmcVisit || 0 }); }
     },
     TICKET_OPEN: {
       roles: ['customer', 'sales', 'admin', 'owner', 'tech', 'qc'], stages: ['amc'],
@@ -742,6 +743,32 @@
       apply: (S, ev, P) => { const h = P.holds[P.holds.length - 1]; h.to = ev.t; h.endBy = ev.by; }
     },
 
+    /* ----- work pay: the office approves a finished week, Finance pays it ----- */
+    PAY_WEEK_APPROVE: {
+      roles: OFFICE, noProject: true,
+      check: (S, d, P, u) => {
+        const w = payWeek(S, d.uid, d.week);
+        if (!S.users[d.uid]) return 'err_user';
+        if (!w.total) return 'err_no_pay';
+        if (d.week >= weekOf(nowISO())) return 'err_week_open';
+        if (w.approved) return 'err_done_already';
+        if (d.uid === u.uid) return 'err_own_pay';
+        return null;
+      },
+      apply: (S, ev) => { const k = ev.d.uid + '|' + ev.d.week; S.pay[k] = Object.assign(S.pay[k] || {}, { approved: { t: ev.t, by: ev.by, amount: payWeek(S, ev.d.uid, ev.d.week).total } }); }
+    },
+    PAY_WEEK_PAID: {
+      roles: ['finance', 'owner'], noProject: true,
+      check: (S, d, P, u) => {
+        const w = payWeek(S, d.uid, d.week);
+        if (!w.approved) return 'err_pay_not_approved';
+        if (w.paid) return 'err_done_already';
+        if (d.uid === u.uid) return 'err_own_pay';
+        return str(d.ref).length < 4 ? 'err_ref' : null;
+      },
+      apply: (S, ev) => { S.pay[ev.d.uid + '|' + ev.d.week].paid = { t: ev.t, by: ev.by, ref: str(ev.d.ref) }; }
+    },
+
     /* ----- problems and messages ----- */
     BLOCKER_RAISE: {
       roles: ['sales', 'tech', 'supplier', 'qc', 'customer', 'field', 'admin', 'owner'], stages: OPEN_STAGES,
@@ -779,6 +806,42 @@
 
   const onHold = P => !!P.holds && P.holds.some(h => !h.to);
   const licenceOk = (P, at) => { const l = (P.statutory || {}).licence; return !!l && l.expiry > dayOf(at || nowISO()); };
+
+  /* ---------- work pay (derived from the work itself) ---------- */
+  /* weeks start on Monday (the phone's local date) */
+  const weekOf = iso => { const d = new Date(iso); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return todayStr(d); };
+  function earnings(S, uid) {
+    const out = [];
+    for (const P of Object.values(S.projects)) {
+      P.sop.forEach((x, i) => { if (x && x.by === uid && x.pay) out.push({ pid: P.id, kind: 'step', n: i + 1, t: x.t, amount: x.pay }); });
+      P.qcSite.forEach(x => { if (x.by === uid && x.pay) out.push({ pid: P.id, kind: 'qc_site', t: x.t, amount: x.pay }); });
+      P.qcFinal.forEach(x => { if (x.by === uid && x.pay) out.push({ pid: P.id, kind: 'qc_final', t: x.t, amount: x.pay }); });
+      P.amc.visits.forEach((x, i) => { if (x.by === uid && x.pay) out.push({ pid: P.id, kind: 'amc', n: i + 1, t: x.t, amount: x.pay }); });
+    }
+    return out.sort((a, b) => b.t.localeCompare(a.t));
+  }
+  function payWeek(S, uid, week) {
+    const items = earnings(S, uid).filter(x => weekOf(x.t) === week);
+    const rec = S.pay[uid + '|' + week] || {};
+    return { uid, week, items, total: sum(items.map(x => x.amount)), approved: rec.approved || null, paid: rec.paid || null };
+  }
+  function payWeeks(S, uid) {
+    const weeks = uniq(earnings(S, uid).map(x => weekOf(x.t))).sort().reverse();
+    return weeks.map(w => payWeek(S, uid, w));
+  }
+  /* tasks that belong to no single job: approving and paying finished weeks */
+  function companyTasks(S) {
+    const out = [], cur = weekOf(nowISO());
+    for (const u of Object.values(S.users)) {
+      if (!['tech', 'qc'].includes(u.role) && !earnings(S, u.uid).length) continue;
+      for (const w of payWeeks(S, u.uid)) {
+        if (w.week >= cur || !w.total) continue;
+        if (!w.approved) out.push({ k: 'approve_pay', roles: ['admin', 'owner'], type: 'PAY_WEEK_APPROVE', who: u.uid, week: w.week, amount: w.total, not: u.uid, pid: '', since: addDays(7, new Date(w.week + 'T12:00:00')) + 'T00:00:00' });
+        else if (!w.paid) out.push({ k: 'pay_week', roles: ['finance', 'owner'], type: 'PAY_WEEK_PAID', who: u.uid, week: w.week, amount: w.approved.amount, not: u.uid, pid: '', since: w.approved.t });
+      }
+    }
+    return out.map(x => Object.assign(x, { dueDay: null, lateDays: 0, late: false, stuck: false }));
+  }
 
   /* the one guard used by buttons, task lists and saving: role, assignment, stage, visibility */
   function guard(S, uid, type, pid, ev) {
@@ -932,6 +995,8 @@
   function tasksFor(S, uid) {
     const out = [];
     for (const P of Object.values(S.projects)) if (canSee(S, uid, P)) for (const k of needs(S, P)) if (taskFor(S, uid, k)) out.push(k);
+    const u = S.users[uid];
+    if (u && u.active) for (const k of companyTasks(S)) if (k.who !== uid && actsAs(S, u, k.roles)) out.push(k);
     const rank = x => (x.urgent || x.late ? 0 : 1) * 1e9 - (x.lateDays || 0) * 1e3 + (x.info ? 2e9 : 0);
     return out.sort((a, b) => rank(a) - rank(b) || String(a.dueDay || '9').localeCompare(String(b.dueDay || '9')) || String(a.since).localeCompare(String(b.since)));
   }
@@ -974,7 +1039,7 @@
     CONTACT_ROLES, SHAFT, LOST_REASONS, RETURN_REASONS, CALL_OUTCOMES, PREP_ITEMS, QC_SITE_CHECKS, QC_SITE_MEAS, QC_FINAL_CHECKS,
     SOP, CABIN_STEP, SOP_READ, SAFETY_ITEMS, BLOCK_REASONS, AMC_CHECKS, TICKET_KINDS, SEVERITIES, ROOT_CAUSES, PAY_MODES,
     LIFT_TYPES, CAPACITIES, FINISHES, JOB_KINDS, USES, TIMELINES, PURPOSES, PAY_STAGE,
-    STAT_KINDS, STAT_STAGES, HOLD_REASONS, onHold, licenceOk,
+    STAT_KINDS, STAT_STAGES, HOLD_REASONS, onHold, licenceOk, weekOf, earnings, payWeek, payWeeks, companyTasks,
     DEFAULT_CONFIG, CFG_LIMITS, TEXT_CFG, RULE_GROUPS,
     calcQuote, paySchedule, materialList, lastQuote, quoteValidTill, quoteExpired, activePay, payConfirmed, paidTotal, dueOf, payOpen,
     sopNext, prepDone, openCorr, safetyToday, leadHeat, warrantyEnd, amcDue, nextAmc,

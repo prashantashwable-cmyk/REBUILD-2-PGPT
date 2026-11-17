@@ -170,6 +170,29 @@ act('u_cus', 'TICKET_OPEN', pid, { kind: 'breakdown', severity: 'breakdown', tex
 ok(A.tasksFor(S, 'u_tch').some(x => x.k === 'close_ticket'), 'tech gets ticket');
 act('u_tch', 'TICKET_CLOSE', pid, { tid: P.amc.tickets[0].id, cause: 'door', note: 'Adjusted door sensor' }, true);
 
+/* ---- work pay: earned per step/visit/inspection, approved by the office for a finished week, paid by Finance ---- */
+{
+  const wk = A.weekOf(LOG.find(e => e.type === 'SOP_STEP').t);
+  const w = A.payWeek(S, 'u_tch', wk);
+  eq(w.items.filter(x => x.kind === 'step').length, 12, 'twelve paid steps');
+  eq(w.total, 12 * A.DEFAULT_CONFIG.paySopStep, 'step pay total');
+  eq(A.payWeek(S, 'u_qc', wk).items.length, 4, 'four paid QC inspections');
+  refuse('u_adm', 'PAY_WEEK_APPROVE', '', { uid: 'u_tch', week: wk }, 'err_week_open');
+  clock += 8 * 864e5;
+  ok(A.tasksFor(S, 'u_adm').some(x => x.k === 'approve_pay' && x.who === 'u_tch'), 'admin asked to approve the finished week');
+  ok(!A.tasksFor(S, 'u_tch').some(x => x.k === 'approve_pay'), 'nobody approves their own pay');
+  refuse('u_tch', 'PAY_WEEK_APPROVE', '', { uid: 'u_tch', week: wk }, 'err_role_not_allowed');
+  refuse('u_fin', 'PAY_WEEK_PAID', '', { uid: 'u_tch', week: wk, ref: 'NEFT1234' }, 'err_pay_not_approved');
+  act('u_adm', 'PAY_WEEK_APPROVE', '', { uid: 'u_tch', week: wk });
+  refuse('u_adm', 'PAY_WEEK_APPROVE', '', { uid: 'u_tch', week: wk }, 'err_done_already');
+  ok(A.tasksFor(S, 'u_fin').some(x => x.k === 'pay_week' && x.who === 'u_tch'), 'finance asked to pay');
+  refuse('u_fin', 'PAY_WEEK_PAID', '', { uid: 'u_tch', week: wk, ref: 'x' }, 'err_ref');
+  act('u_fin', 'PAY_WEEK_PAID', '', { uid: 'u_tch', week: wk, ref: 'NEFT556677' });
+  eq(A.payWeek(S, 'u_tch', wk).paid.ref, 'NEFT556677', 'week marked paid');
+  act('u_own', 'CONFIG_SET', '', { key: 'paySopStep', value: 2000 });
+  eq(A.payWeek(S, 'u_tch', wk).total, 12 * A.DEFAULT_CONFIG.paySopStep, 'a rate change does not change past work');
+}
+
 /* ---- separation of duties ---- */
 {
   const p2 = 'PUN-2611-CCCC';

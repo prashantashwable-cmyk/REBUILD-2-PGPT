@@ -205,6 +205,26 @@
     if (who) await dispatch('REASSIGN', pid, { field: f, uid: who }, t('saved_item'));
   }
 
+  /* ---------- work pay: my weeks (tech, QC) or everyone's (office, Finance) ---------- */
+  Screens.pay = ({ S, u, parts }) => {
+    const office = A.OFFICE.includes(u.role) || u.role === 'finance';
+    const uid = parts[1] && office ? parts[1] : (office ? '' : u.uid);
+    const chip = w => w.paid ? U.chip('✅ ' + t('paid'), 'ok') : w.approved ? U.chip(t('approved'), 'info') : w.week >= A.weekOf(A.nowISO()) ? U.chip(t('week_running'), 'gold') : U.chip(t('waiting_approval'), 'warn');
+    if (!uid) {
+      const people = Object.values(S.users).filter(x => A.earnings(S, x.uid).length).sort((a, b) => a.name.localeCompare(b.name));
+      const body = `<div class="stack-l">${U.banner('💰', esc(t('pay_office_d', { a: U.money(S.config.paySopStep), b: U.money(S.config.payQcInspection), c: U.money(S.config.payAmcVisit) })))}
+        <div class="list">${people.map(x => { const ws = A.payWeeks(S, x.uid), open = ws.filter(w => !w.paid && w.week < A.weekOf(A.nowISO())); return `<a class="row" href="#/pay/${esc(x.uid)}"><span class="ico">${A.ROLE_ICON[x.role]}</span><span class="body"><span class="title">${esc(x.name)}</span><div class="sub">${esc(U.roleName(x.role))}</div><div class="chips">${open.length ? U.chip(t('weeks_open', { n: open.length }), 'warn') : U.chip(t('all_paid'), 'ok')}${U.chip(t('this_week') + ': ' + U.money(A.payWeek(S, x.uid, A.weekOf(A.nowISO())).total))}</div></span><span class="chev">›</span></a>`; }).join('') || U.empty('💰', t('nothing_here'))}</div></div>`;
+      return { title: t('work_pay'), back: '/me', body };
+    }
+    const ws = A.payWeeks(S, uid);
+    const due = ws.filter(w => w.approved && !w.paid).reduce((a, w) => a + w.approved.amount, 0);
+    const body = `<div class="stack-l">
+      <div class="kpis"><div class="kpi"><div class="v">${U.money(A.payWeek(S, uid, A.weekOf(A.nowISO())).total)}</div><div class="l">${esc(t('this_week'))}</div></div><div class="kpi"><div class="v">${U.money(due)}</div><div class="l">${esc(t('approved_unpaid'))}</div></div></div>
+      ${ws.map(w => `<details class="fold" ${w === ws[0] ? 'open' : ''}><summary><span style="flex:1">${esc(t('week_of', { d: U.fmtD(w.week) }))} · <b class="num">${U.money(w.total)}</b></span>${chip(w)}</summary><div class="in"><table class="money">${w.items.map(x => `<tr><td>${esc(t('earn_' + x.kind, { n: x.n }))}<br><span class="small muted">${esc(x.pid)} · ${esc(U.fmtD(x.t))}</span></td><td>${U.money(x.amount)}</td></tr>`).join('')}</table>${w.paid ? `<p class="small muted">✅ ${esc(t('paid_on', { d: U.fmtD(w.paid.t), ref: w.paid.ref }))}</p>` : ''}</div></details>`).join('') || U.empty('💰', t('no_pay_yet'), t('no_pay_yet_d'))}
+      <p class="small muted">${esc(t('pay_rule_d'))}</p></div>`;
+    return { title: uid === u.uid ? t('my_pay') : U.userName(uid), sub: t('work_pay'), back: office ? '/pay' : '/home', body };
+  };
+
   /* ---------- customer chat inbox ---------- */
   Screens.chat = ({ S, u }) => {
     const Ps = A.visibleProjects(S, u);
@@ -302,9 +322,9 @@
     const edit = u.role === 'owner';
     const body = `<div class="stack-l">${edit ? '' : U.banner('🔒', esc(t('rules_owner_only')))}
       ${Object.entries(A.RULE_GROUPS).map(([g, keys]) => `<details class="fold" ${g === 'pricing' ? 'open' : ''}><summary>${esc(t('rg_' + g))}</summary><div class="in"><form class="stack" data-rules="${g}" novalidate>
-        ${keys.map(k => { const lim = A.CFG_LIMITS[k]; const text = k in A.TEXT_CFG; return U.field(t('cfg_' + k), `<input data-rule="${k}" ${text ? 'type="text"' : 'type="number" inputmode="decimal"'} value="${esc(S.config[k])}" ${lim ? `min="${lim[0]}" max="${lim[1]}"` : ''} ${edit ? '' : 'disabled'}>`, { hint: lim ? t('range', { a: lim[0], b: lim[1] }) : '' }); }).join('')}
+        ${keys.map(k => { const lim = A.CFG_LIMITS[k]; const text = k in A.TEXT_CFG; return U.field(t('cfg_' + k), `<input id="r_${k}" data-rule="${k}" ${text ? 'type="text"' : 'type="number" inputmode="decimal"'} value="${esc(S.config[k])}" ${lim ? `min="${lim[0]}" max="${lim[1]}"` : ''} ${edit ? '' : 'disabled'}>`, { id: 'r_' + k, hint: lim ? t('range', { a: lim[0], b: lim[1] }) : '' }); }).join('')}
         ${edit ? `<button class="btn primary block" type="submit">${esc(t('save'))}</button>` : ''}</form></div></details>`).join('')}
-      <div class="card stack"><h3>🧮 ${esc(t('try_price'))}</h3><p class="small muted">${esc(t('try_price_d'))}</p><div id="try-out">${quoteTable(A.calcQuote(S.config, { type: 'auto', stops: 4, capacity: '6', finish: 'ss', job: 'new' }, 0), true)}</div></div>
+      <div class="card stack"><h2 class="h3">🧮 ${esc(t('try_price'))}</h2><p class="small muted">${esc(t('try_price_d'))}</p><div id="try-out">${quoteTable(A.calcQuote(S.config, { type: 'auto', stops: 4, capacity: '6', finish: 'ss', job: 'new' }, 0), true)}</div></div>
     </div>`;
     return { title: t('nav_rules'), back: '/me', body,
       after(root) {
@@ -343,10 +363,10 @@
         <div class="kpi"><div class="v">${d.amc}</div><div class="l">${esc(t('kpi_amc'))}</div></div>
         <div class="kpi"><div class="v" style="color:${d.tickets ? 'var(--bad)' : 'inherit'}">${d.tickets}</div><div class="l">${esc(t('kpi_tickets'))}</div></div>
       </div>
-      <div class="card stack"><h3>🛗 ${esc(t('where_jobs_are'))}</h3><div class="bars">${d.byPhase.map(x => `<a class="b" href="#/jobs?f=${A.PHASES.findIndex(p => p[0] === x.ph)}" style="color:inherit;text-decoration:none"><span>${esc(t('ph_' + x.ph))}</span><span class="t"><i style="width:${Math.round(x.n / max * 100)}%"></i></span><b class="num right">${x.n}</b></a>`).join('')}</div></div>
+      <div class="card stack"><h2 class="h3">🛗 ${esc(t('where_jobs_are'))}</h2><div class="bars">${d.byPhase.map(x => `<a class="b" href="#/jobs?f=${A.PHASES.findIndex(p => p[0] === x.ph)}" style="color:inherit;text-decoration:none"><span>${esc(t('ph_' + x.ph))}</span><span class="t"><i style="width:${Math.round(x.n / max * 100)}%"></i></span><b class="num right">${x.n}</b></a>`).join('')}</div></div>
       <section class="stack"><div class="section-title"><h2>⏫ ${esc(t('stuck_work'))}</h2><span class="count">${stuck.length}</span></div>${stuck.length ? `<div class="list">${stuck.slice(0, 20).map(k => A.taskRow(k, S, { showWho: true, role: u.role })).join('')}</div>` : `<div class="card">${U.empty('🎉', t('nothing_stuck'))}</div>`}<p class="muted small">${esc(t('stuck_rule', { n: S.config.escalateDays }))}</p></section>
       ${pend.length ? `<section class="stack"><div class="section-title"><h2>🏦 ${esc(t('payments_to_check'))}</h2><span class="count">${pend.length}</span></div><div class="list">${pend.map(({ P, p }) => `<a class="row" href="#/flow/PAY_VERIFY/${esc(P.id)}?pay=${esc(p.id)}"><span class="ico">🏦</span><span class="body"><span class="title">${U.money(p.amount)} · ${esc(t('pay_' + p.purpose))}</span><div class="sub">${esc(P.id)} · ${esc(P.lead.name)} · ${esc(U.ago(p.t))}</div></span><span class="chev">›</span></a>`).join('')}</div></section>` : ''}
-      ${reasons.length ? `<div class="card stack"><h3>❌ ${esc(t('why_lost'))}</h3><div class="bars">${reasons.map(([k, n]) => `<div class="b"><span>${esc(t(k))}</span><span class="t"><i style="width:${Math.round(n / lost.length * 100)}%;background:var(--bad)"></i></span><b class="num right">${n}</b></div>`).join('')}</div></div>` : ''}
+      ${reasons.length ? `<div class="card stack"><h2 class="h3">❌ ${esc(t('why_lost'))}</h2><div class="bars">${reasons.map(([k, n]) => `<div class="b"><span>${esc(t(k))}</span><span class="t"><i style="width:${Math.round(n / lost.length * 100)}%;background:var(--bad)"></i></span><b class="num right">${n}</b></div>`).join('')}</div></div>` : ''}
     </div>`;
     return { title: t('nav_dash'), sub: S.org.name, body, wide: true };
   };
@@ -367,6 +387,7 @@
       </section>
       <section class="list">
         ${office ? `<a class="row" href="#/people"><span class="ico">👥</span><span class="body"><span class="title">${esc(t('nav_people'))}</span></span><span class="chev">›</span></a><a class="row" href="#/rules"><span class="ico">⚙️</span><span class="body"><span class="title">${esc(t('nav_rules'))}</span><div class="sub">${esc(t(u.role === 'owner' ? 'rules_d' : 'rules_owner_only'))}</div></span><span class="chev">›</span></a>` : ''}
+        ${['tech', 'qc'].includes(u.role) ? `<a class="row" href="#/pay"><span class="ico">💰</span><span class="body"><span class="title">${esc(t('my_pay'))}</span></span><span class="chev">›</span></a>` : office || u.role === 'finance' ? `<a class="row" href="#/pay"><span class="ico">💰</span><span class="body"><span class="title">${esc(t('work_pay'))}</span><div class="sub">${esc(t('work_pay_d'))}</div></span><span class="chev">›</span></a>` : ''}
         <button class="row" type="button" data-a="changePin"><span class="ico">🔐</span><span class="body"><span class="title">${esc(t('change_pin'))}</span></span><span class="chev">›</span></button>
         <button class="row" type="button" data-a="exportData"><span class="ico">📤</span><span class="body"><span class="title">${esc(t('share_data'))}</span><div class="sub">${esc(t('share_data_d'))}</div></span><span class="chev">›</span></button>
         <button class="row" type="button" data-a="importFile"><span class="ico">📂</span><span class="body"><span class="title">${esc(t('open_file'))}</span><div class="sub">${esc(t('open_file_d'))}</div></span><span class="chev">›</span></button>
@@ -377,7 +398,7 @@
         <button class="btn block dark" type="button" data-a="logout">🚪 ${esc(t('logout'))}</button>
         ${A.Store.mode === 'practice' ? `<button class="btn block" type="button" data-a="exitPractice">🎓 ${esc(t('exit_practice'))}</button>` : ''}
       </div>
-      <p class="muted tiny center">AIEC Elevator OS · ${esc(t('version'))} 2.1 · ${esc(t('autosaved'))}</p>
+      <p class="muted tiny center">AIEC Elevator OS · ${esc(t('version'))} 2.2 · ${esc(t('autosaved'))}</p>
     </div>`;
     return { title: t('me'), body };
   };

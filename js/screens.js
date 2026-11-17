@@ -10,6 +10,8 @@
   /* where a task opens: every task goes straight to the screen where it is done */
   function taskPath(k) {
     const p = k.pid;
+    if (k.k === 'approve_pay') return '/flow/PAY_APPROVE?uid=' + k.who + '&week=' + k.week;
+    if (k.k === 'pay_week') return '/flow/PAY_PAID?uid=' + k.who + '&week=' + k.week;
     if (k.info) return '/job/' + p;
     switch (k.k) {
       case 'get_decision': return '/flow/DECISION/' + p;
@@ -25,9 +27,12 @@
     }
   }
   A.taskPath = taskPath;
-  const TASK_EM = { review_lead: '🆕', fix_lead: '↩️', call_customer: '📞', write_needs: '📝', make_quote: '🧮', approve_quote: '⏳', send_quote: '📤', get_decision: '🤝', prepare_agreement: '📄', sign_agreement: '✍️', record_payment: '💰', verify_payment: '🏦', prepare_site: '🧱', request_qc: '🔍', inspect_site: '🔍', fix_site: '🛠️', release: '📐', accept_po: '📑', dispatch: '🚚', arrival: '📍', material_handover: '📦', wait_payment: '⏳', wait_cabin_pay: '⏳', safety_check: '🦺', install: '🔧', request_inspection: '🙋', final_inspect: '🔍', fix_install: '🛠️', sign_handover: '✍️', complete_handover: '🔑', amc_visit: '🛠️', close_ticket: '🚨', resolve_blocker: '⚠️', record_permit: '📝', record_licence: '📜', renew_licence: '📜', wait_permit: '📝' };
+  const TASK_EM = { review_lead: '🆕', fix_lead: '↩️', call_customer: '📞', write_needs: '📝', make_quote: '🧮', approve_quote: '⏳', send_quote: '📤', get_decision: '🤝', prepare_agreement: '📄', sign_agreement: '✍️', record_payment: '💰', verify_payment: '🏦', prepare_site: '🧱', request_qc: '🔍', inspect_site: '🔍', fix_site: '🛠️', release: '📐', accept_po: '📑', dispatch: '🚚', arrival: '📍', material_handover: '📦', wait_payment: '⏳', wait_cabin_pay: '⏳', safety_check: '🦺', install: '🔧', request_inspection: '🙋', final_inspect: '🔍', fix_install: '🛠️', sign_handover: '✍️', complete_handover: '🔑', amc_visit: '🛠️', close_ticket: '🚨', resolve_blocker: '⚠️', approve_pay: '🧾', pay_week: '💸', record_permit: '📝', record_licence: '📜', renew_licence: '📜', wait_permit: '📝' };
   const taskEm = k => TASK_EM[k.k] || '•';
   const custLabel = P => P.lead.name + (P.lead.area ? ' · ' + P.lead.area : P.lead.building ? ' · ' + P.lead.building : '');
+  /* the second line of a task: the job, or (for company tasks) the person and week */
+  const taskSub = (k, S) => k.pid ? `${S.projects[k.pid].id} · ${custLabel(S.projects[k.pid])}` : `${U.userName(k.who)} · ${t('week_of', { d: U.fmtD(k.week) })}`;
+  A.taskSub = taskSub;
   function dueChip(k) {
     if (k.info) return U.chip(t('waiting'), '');
     if (k.late) return U.chip(t('late_days', { n: k.lateDays }), 'bad');
@@ -38,12 +43,12 @@
   }
   function taskRow(k, S, opts = {}) {
     const P = S.projects[k.pid];
-    const who = opts.showWho ? whoFor(S, P, k) : '';
+    const who = opts.showWho && P ? whoFor(S, P, k) : '';
     return `<a class="row ${k.info ? 'info-row' : k.late ? 'urgent' : k.urgent ? 'late' : ''}" href="#${taskPath(k)}">
       <span class="ico" aria-hidden="true">${taskEm(k)}</span>
       <span class="body"><span class="title">${esc(U.taskTitle(k))}</span>
-        <div class="sub">${esc(P.id)} · ${esc(custLabel(P))}</div>
-        <div class="chips">${dueChip(k)}${who ? U.chip('👤 ' + who, 'info') : ''}${k.purpose && A.seesMoney(opts.role) ? U.chip(U.money(A.dueOf(P, k.purpose)), 'gold') : ''}</div></span>
+        <div class="sub">${esc(taskSub(k, S))}</div>
+        <div class="chips">${dueChip(k)}${who ? U.chip('👤 ' + who, 'info') : ''}${k.purpose && P && A.seesMoney(opts.role) ? U.chip(U.money(A.dueOf(P, k.purpose)), 'gold') : ''}${k.amount ? U.chip(U.money(k.amount), 'gold') : ''}</div></span>
       <span class="chev" aria-hidden="true">›</span></a>`;
   }
   /* names of the people a step waits for, or their role */
@@ -79,7 +84,7 @@
     const people = Object.values(S.users).filter(x => x.active).sort((a, b) => A.ROLES.indexOf(a.role) - A.ROLES.indexOf(b.role) || a.name.localeCompare(b.name));
     const top = `<div class="top">
       <div class="logo">${A.App.logoSvg(84)}</div>
-      <div class="brand">${esc(S.org ? S.org.name : 'AIEC Elevator OS')}</div>
+      <h1 class="brand">${esc(S.org ? S.org.name : 'AIEC Elevator OS')}</h1>
       <div class="tag">${esc(S.org ? 'AIEC Elevator OS' : t('company'))}</div>
       <div class="lang-pick" style="margin-top:16px" role="group" aria-label="${esc(t('language'))}">${U.LANGS.map(([k, n]) => `<button type="button" data-a="setLang" data-v="${k}" aria-pressed="${U.getLang() === k}" lang="${k}">${n}</button>`).join('')}<button type="button" data-a="sayPage" aria-label="${esc(t('listen'))}">🔊</button></div>
     </div>`;
@@ -110,7 +115,7 @@
         </div></details>
       </div>`;
     }
-    return { raw: true, body: `<div class="door">${top}<div class="sheet-in">${inner}</div></div>`, say: t('welcome_say'),
+    return { raw: true, body: `<div class="door">${top}<main class="sheet-in" id="main" tabindex="-1">${inner}</main></div>`, say: t('welcome_say'),
       after(root) {
         const s = root.querySelector('[data-filter="people"]');
         if (s) s.addEventListener('input', () => { const q = s.value.trim().toLowerCase(); root.querySelectorAll('#people .person').forEach(b => { b.hidden = q && !b.dataset.name.includes(q); }); });
@@ -143,13 +148,13 @@
     const wait = A.Session.lockedFor(p.uid);
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'ok'];
     return { raw: true, body: `<div class="door"><div class="top"><div class="logo">${A.App.logoSvg(64)}</div><div class="brand">${esc(S.org.name)}</div></div>
-      <div class="sheet-in"><div class="stack-l" style="text-align:center">
-        <div class="stack" style="align-items:center"><span class="avatar" aria-hidden="true">${A.ROLE_ICON[p.role]}</span><h2>${esc(p.name)}</h2><span class="muted">${esc(U.roleName(p.role))}</span></div>
-        <div><h3 id="pin-lab">${esc(t('enter_pin'))}</h3><div class="pin-dots" id="pin-dots" aria-live="polite" aria-labelledby="pin-lab">${'<i></i>'.repeat(4)}</div>
+      <main class="sheet-in" id="main" tabindex="-1"><div class="stack-l" style="text-align:center">
+        <div class="stack" style="align-items:center"><span class="avatar" aria-hidden="true">${A.ROLE_ICON[p.role]}</span><h1 style="font-size:1.2rem">${esc(p.name)}</h1><span class="muted">${esc(U.roleName(p.role))}</span></div>
+        <div><h2 class="h3" id="pin-lab">${esc(t("enter_pin"))}</h2><div class="pin-dots" id="pin-dots" role="status" aria-live="polite" aria-label="${esc(t('enter_pin'))}">${'<i></i>'.repeat(4)}</div>
         <p id="pin-msg" class="small" role="alert" style="min-height:1.5em;color:var(--bad);font-weight:650">${wait ? esc(t('locked', { n: wait })) : ''}</p></div>
         <div class="keypad" role="group" aria-label="${esc(t('enter_pin'))}">${keys.map(k => k === 'back' ? `<button type="button" class="fn" data-a="pinKey" data-v="back" aria-label="${esc(t('delete'))}">⌫</button>` : k === 'ok' ? `<button type="button" class="fn" data-a="go" data-v="/door">${esc(t('not_me'))}</button>` : `<button type="button" data-a="pinKey" data-v="${k}">${k}</button>`).join('')}</div>
         ${A.Store.mode === 'practice' ? `<p class="muted small">🎓 ${esc(t('practice_pin'))}</p>` : ''}
-      </div></div></div>`,
+      </div></main></div>`,
       after() {
         pinBuf = '';
         const onKey = e => { if (!document.getElementById('pin-dots')) { document.removeEventListener('keydown', onKey); return; } if (/^\d$/.test(e.key)) pinPress(e.key); else if (e.key === 'Backspace') pinPress('back'); };
@@ -225,11 +230,10 @@
       return `<section class="hero done" aria-labelledby="hero-t"><div class="eyebrow">✓ ${esc(t('all_clear'))}</div><h2 id="hero-t">${esc(t('no_tasks'))}</h2><p class="meta">${esc(t(field ? 'no_tasks_field' : 'no_tasks_other'))}</p>
         ${A.can(S, u.uid, 'LEAD_CREATE') ? `<a class="btn primary block lg" href="#/flow/LEAD_CREATE">＋ ${esc(t(u.role === 'field' ? 'add_site' : 'nav_new_lead'))}</a>` : ''}</section>`;
     }
-    const P = S.projects[k.pid];
     return `<section class="hero" aria-labelledby="hero-t">
       <div class="eyebrow">${k.late ? '🔴 ' + esc(t('late_days', { n: k.lateDays })) : k.urgent ? '⚡ ' + esc(t('urgent')) : '▶ ' + esc(t('next_for_you'))}</div>
       <h2 id="hero-t">${taskEm(k)} ${esc(U.taskTitle(k))}</h2>
-      <p class="meta">${esc(P.id)} · ${esc(custLabel(P))}${k.dueDay && !k.late ? ' · ' + esc(k.dueDay === A.todayStr() ? t('due_today') : t('due_on', { d: U.fmtD(k.dueDay) })) : ''}</p>
+      <p class="meta">${esc(taskSub(k, S))}${k.dueDay && !k.late ? ' · ' + esc(k.dueDay === A.todayStr() ? t('due_today') : t('due_on', { d: U.fmtD(k.dueDay) })) : ''}</p>
       <a class="btn primary block lg" href="#${taskPath(k)}">${esc(t('start_now'))} →</a>
     </section>`;
   }
@@ -260,6 +264,10 @@
     if (!office && u.role !== 'finance') {
       const mine = visibleProjects(S, u).filter(P => A.OPEN_STAGES.includes(P.stage) && !tasks.some(k => k.pid === P.id)).sort((a, b) => lastTouch(b).localeCompare(lastTouch(a))).slice(0, 5);
       if (mine.length) parts.push(`<section class="stack"><div class="section-title"><h2>${esc(t('with_others'))}</h2><span class="spacer"></span><a class="link-btn" href="#/jobs">${esc(t('see_all'))}</a></div><div class="list">${mine.map(P => projRow(P, S, u)).join('')}</div></section>`);
+    }
+    if (['tech', 'qc'].includes(u.role)) {
+      const wk = A.payWeek(S, u.uid, A.weekOf(A.nowISO()));
+      parts.push(`<a class="row" href="#/pay"><span class="ico" aria-hidden="true">💰</span><span class="body"><span class="title">${esc(t('pay_this_week', { n: U.money(wk.total) }))}</span><div class="sub">${esc(t('pay_this_week_d', { n: wk.items.length }))}</div></span><span class="chev" aria-hidden="true">›</span></a>`);
     }
     if (u.role === 'field') {
       const month = A.todayStr().slice(0, 7);

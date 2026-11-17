@@ -168,6 +168,24 @@ const log = m => console.log('  ' + m);
   const after = await S(() => (Object.values(AIEC.Store.S.projects).find(P => P.lead.phone === '9822555111') || {}).stage);
   if (after !== 'amc') { fails++; console.error('✗ not saved after reload: ' + after); } else log('✓ saved after reload');
 
+  console.log('Work pay');
+  {
+    await login('u_admin');
+    const k = await S(() => AIEC.tasksFor(AIEC.Store.S, AIEC.Session.uid).find(t => t.k === 'approve_pay'));
+    if (!k) { fails++; console.error('✗ no pay week to approve'); }
+    else {
+      await p.evaluate(h => { AIEC.Flow.active = null; location.hash = '#' + h; AIEC.App.render(); }, await S(x => AIEC.taskPath(x), k)); await wait(300);
+      await shot('pay-approve'); await next(); await done('office approves a week of pay');
+      await login('u_fin');
+      const k2 = await S(w => AIEC.tasksFor(AIEC.Store.S, AIEC.Session.uid).find(t => t.k === 'pay_week' && t.week === w.week && t.who === w.who), k);
+      await p.evaluate(h => { AIEC.Flow.active = null; location.hash = '#' + h; AIEC.App.render(); }, await S(x => AIEC.taskPath(x), k2)); await wait(300);
+      await fill('ref', 'NEFT20261116'); await next(); await done('finance pays the week');
+      await login(k.who); await S(() => { location.hash = '#/pay'; AIEC.App.render(); }); await wait(300); await shot('my-pay');
+      const paid = await S(w => !!AIEC.payWeek(AIEC.Store.S, w.who, w.week).paid, k);
+      if (!paid) { fails++; console.error('✗ week not paid'); } else log('✓ technician sees the week as paid');
+    }
+  }
+
   for (const lang of ['hi', 'mr']) {
     await S(l => { AIEC.UI.setLang(l); }, lang);
     await login('u_sales'); await S(() => { location.hash = '#/home'; AIEC.App.render(); }); await wait(300); await shot('home-' + lang);

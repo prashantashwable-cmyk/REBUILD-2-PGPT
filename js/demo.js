@@ -137,6 +137,13 @@
       if (o.hold) run('u_admin', 'HOLD_START', pid, { reason: 'supplier', note: 'Controller panel stock arrives next week.' });
       if (o.ticket) { clock = Date.now() - 3 * 3600e3; run(o.cust || 'u_sales', 'TICKET_OPEN', pid, { kind: 'breakdown', severity: 'breakdown', text: 'Lift door does not close fully on 2nd floor.' }); }
     });
+    /* pay: weeks before last are approved and paid; last week waits for the office */
+    clock = Date.now() - 3 * 3600e3;
+    const lastWeek = A.weekOf(new Date(Date.now() - 7 * 864e5).toISOString());
+    for (const uid of ['u_tech1', 'u_tech2', 'u_qc']) for (const w of A.payWeeks(S, uid)) if (w.week < lastWeek && w.total) {
+      run('u_admin', 'PAY_WEEK_APPROVE', '', { uid, week: w.week });
+      run('u_fin', 'PAY_WEEK_PAID', '', { uid, week: w.week, ref: 'NEFT' + w.week.replace(/-/g, '') });
+    }
     /* a little conversation, so chat is not empty */
     clock = Date.now() - 2 * 3600e3;
     run('u_cust1', 'MSG_POST', 'PUN-P007', { text: 'Namaste, can the cabin be stainless steel?' });

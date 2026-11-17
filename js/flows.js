@@ -113,7 +113,7 @@
       }
     }
     const body = `<div class="stack-l"><div class="success" role="status"><div class="big" aria-hidden="true">✓</div><h1>${esc(t('done_title'))}</h1></div>
-      <div class="card stack"><h3>${esc(t('what_happened'))}</h3><p>${esc(f.done.what || t('saved_item'))}</p>${nextLine ? `<h3>${esc(t('what_next'))}</h3><p>${esc(nextLine)}</p>` : ''}</div>
+      <div class="card stack"><h2 class="h3">${esc(t('what_happened'))}</h2><p>${esc(f.done.what || t('saved_item'))}</p>${nextLine ? `<h2 class="h3">${esc(t('what_next'))}</h2><p>${esc(nextLine)}</p>` : ''}</div>
       ${f.done.extra || ''}
       <div class="stack">
         ${nextK ? `<a class="btn primary block lg" href="#${A.taskPath(nextK)}" data-a="flowGoNext" data-v="${esc(A.taskPath(nextK))}">▶ ${esc(U.taskTitle(nextK))}${nextK.pid !== (P && P.id) ? ' · ' + esc(nextK.pid) : ''}</a>` : ''}
@@ -267,8 +267,8 @@
     type: 'LEAD_ACCEPT', title: () => t('tk_review_lead'),
     steps: (P, c, S) => [{ render: () => {
       const heat = A.leadHeat(P);
-      return `${leadCard(P)}<div class="card stack"><h3>📷 ${esc(t('photos'))}</h3><div class="photos">${P.lead.photos.map(id => `<button type="button" class="photo-slot filled" data-a="viewPhoto" data-v="${esc(id)}">${U.imgTag(id)}</button>`).join('')}</div></div>
-        <div class="card stack"><div class="card-head"><h3>🎯 ${esc(t('lead_score'))}</h3><span class="chip ${heat.n >= 50 ? 'ok' : heat.n >= 30 ? 'info' : ''}">${heat.n}/100</span></div><p class="small muted">${esc(heat.why.map(([n, k]) => '+' + n + ' ' + t(k)).join(' · ') || '—')}</p>
+      return `${leadCard(P)}<div class="card stack"><h2 class="h3">📷 ${esc(t('photos'))}</h2><div class="photos">${P.lead.photos.map(id => `<button type="button" class="photo-slot filled" data-a="viewPhoto" data-v="${esc(id)}">${U.imgTag(id)}</button>`).join('')}</div></div>
+        <div class="card stack"><div class="card-head"><h2 class="h3">🎯 ${esc(t('lead_score'))}</h2><span class="chip ${heat.n >= 50 ? 'ok' : heat.n >= 30 ? 'info' : ''}">${heat.n}/100</span></div><p class="small muted">${esc(heat.why.map(([n, k]) => '+' + n + ' ' + t(k)).join(' · ') || '—')}</p>
         ${kv([[t('phone'), `<a href="tel:${esc(P.lead.phone)}">${esc(P.lead.phone)}</a>`], [t('contact_role'), esc(t('cr_' + P.lead.contactRole))], [t('address'), esc(P.lead.address)], [t('floors'), P.lead.floors], [t('shaft_ready'), esc(t('sh_' + P.lead.shaft))], [t('location'), P.lead.gps ? `<a href="${esc(U.mapsLink(P.lead.gps))}" target="_blank" rel="noopener">${esc(t('open_map'))}</a>` : '—'], [t('notes'), esc(P.lead.notes)], [t('added_by'), esc(U.userName(P.createdBy))]])}</div>
         <p class="muted small">${esc(t('review_rule'))}</p>`;
     }, bar: decideBar('return', '↩️ ' + t('send_back'), t('accept_lead')) }],
@@ -290,7 +290,7 @@
     init: P => ({ lead: { name: P.lead.name, phone: P.lead.phone, address: P.lead.address, area: P.lead.area, building: P.lead.building, notes: P.lead.notes }, more: '' }),
     steps: (P, c) => [{ render: () => `${U.banner('↩️', `<b>${esc(t('returned_because'))}</b>${esc(t(P.returnReason || 'rr_other'))}${P.returnNote ? ' — ' + esc(P.returnNote) : ''}`, 'warn')}
       <div class="card stack">${U.input('lead.name', c.lead.name, { label: t('person_name'), req: true })}${U.input('lead.phone', c.lead.phone, { label: t('phone'), type: 'tel', inputmode: 'numeric', pre: '+91', req: true })}${U.input('lead.building', c.lead.building, { label: t('building_name') })}${U.input('lead.address', c.lead.address, { label: t('address'), textarea: true })}${U.input('lead.area', c.lead.area, { label: t('area') })}${U.input('lead.notes', c.lead.notes, { label: t('notes'), textarea: true })}</div>
-      <div class="card stack"><h3>📷 ${esc(t('add_photo'))}</h3><div class="photos">${U.photoSlot('more', c.more, t('ph_more'))}</div></div>`,
+      <div class="card stack"><h2 class="h3">📷 ${esc(t('add_photo'))}</h2><div class="photos">${U.photoSlot('more', c.more, t('ph_more'))}</div></div>`,
       check: () => (!A.validPhone(c.lead.phone) ? 'err_phone' : !A.str(c.lead.name) ? 'err_name' : P.returnReason === 'rr_photo' && !c.more ? 'err_photo' : null) }],
     submitLabel: () => t('send_again'),
     submit: (P, c) => one('LEAD_FIX', { lead: Object.assign({}, c.lead, { photos: c.more ? [c.more] : [] }) }),
@@ -307,7 +307,7 @@
         <a class="btn primary block lg" href="tel:${esc(P.lead.phone)}">📞 ${esc(t('call'))} ${esc(P.lead.phone)}</a>
         <a class="btn block" href="https://wa.me/91${esc(P.lead.phone)}" target="_blank" rel="noopener">💬 WhatsApp</a>
         ${!P.lead.consent ? `<p class="small" style="color:var(--warn)">⚠️ ${esc(t('no_consent'))}</p>` : ''}</div>
-        <div class="card stack"><h3>${esc(t('call_result'))}</h3>${U.seg('outcome', A.CALL_OUTCOMES.map(([k, em]) => [k, t('co_' + k), em]), c.outcome, 'big cols2')}
+        <div class="card stack"><h2 class="h3">${esc(t('call_result'))}</h2>${U.seg('outcome', A.CALL_OUTCOMES.map(([k, em]) => [k, t('co_' + k), em]), c.outcome, 'big cols2')}
         ${U.input('note', c.note, { label: t('note') + ' (' + t('optional') + ')', textarea: true, mic: true })}
         ${c.outcome && c.outcome !== 'reached' ? U.input('followUp', c.followUp, { label: t('follow_up_on'), type: 'date', min: A.todayStr(), req: c.outcome === 'callback' }) : ''}</div>
         ${calls.length ? `<details class="fold"><summary>🕑 ${esc(t('earlier_calls'))} (${(P.calls || []).length})</summary><div class="in list">${calls.map(x => `<div class="small">${esc(U.fmtDT(x.t))} · <b>${esc(t('co_' + x.outcome))}</b>${x.note ? ' — ' + esc(x.note) : ''}</div>`).join('')}</div></details>` : ''}`;
@@ -329,7 +329,7 @@
         ${U.field(t('q_finish'), U.seg('req.finish', A.FINISHES.map(k => [k, t('fin_' + k)]), c.req.finish, 'cols2'))}
         ${U.field(t('q_job'), U.seg('req.job', A.JOB_KINDS.map(k => [k, t('job_' + k)]), c.req.job, 'cols2'))}</div>`,
         check: () => (!(+c.req.stops >= 2 && +c.req.stops <= 40) ? 'err_stops' : null) },
-      { title: t('extras'), render: () => `<div class="card stack"><h3>${esc(t('addons'))}</h3>
+      { title: t('extras'), render: () => `<div class="card stack"><h2 class="h3">${esc(t('addons'))}</h2>
         ${['ard', 'curtain', 'premium'].map(k => tick('req.' + k, t('add_' + k), c.req[k], t('add_' + k + '_d'))).join('')}</div>
         <div class="card stack">${U.field(t('q_use'), U.seg('req.use', A.USES.map(k => [k, t('use_' + k)]), c.req.use, 'cols3'))}${U.field(t('q_timeline'), U.seg('req.timeline', A.TIMELINES.map(k => [k, t('tl_' + k)]), c.req.timeline, 'cols2'))}${U.input('req.note', c.req.note, { label: t('note') + ' (' + t('optional') + ')', textarea: true, mic: true })}</div>
         ${A.seesMoney(u.role) ? `<div class="banner gold"><span class="em">🧮</span><div><b>${esc(t('estimate'))}: ${U.money(A.calcQuote(S.config, Object.assign({}, c.req, { stops: +c.req.stops }), 0).total)}</b>${esc(t('estimate_d'))}</div></div>` : ''}` }
@@ -349,7 +349,7 @@
     type: 'QUOTE_MAKE', title: () => t('tk_make_quote'),
     init: P => ({ discount: P.quotes.length ? String(A.lastQuote(P).calc.discountPct) : '0', note: '' }),
     live: (c, root) => { const box = root.querySelector('#q-live'); if (!box) return; root.querySelectorAll('[data-a=set][data-k=discount]').forEach(x => x.setAttribute('aria-pressed', String(+x.dataset.v === +c.discount && String(c.discount).trim() !== ''))); const S = A.Store.S, P = S.projects[Flow.active.pid], u = S.users[A.Session.uid]; box.innerHTML = quoteLive(S, P, c, u); },
-    steps: (P, c, S, u) => [{ render: () => `<div class="card stack"><h3>📝 ${esc(t('lift_needs'))}</h3><p class="small">${esc(t('type_' + P.req.type))} · ${esc(t('q_stops'))} ${P.req.stops} · ${esc(t('cap_n', { n: P.req.capacity }))} · ${esc(t('fin_' + P.req.finish))}</p><a class="link-btn" href="#/flow/NEEDS_SAVE/${esc(P.id)}">✏️ ${esc(t('change_needs'))}</a></div>
+    steps: (P, c, S, u) => [{ render: () => `<div class="card stack"><h2 class="h3">📝 ${esc(t('lift_needs'))}</h2><p class="small">${esc(t('type_' + P.req.type))} · ${esc(t('q_stops'))} ${P.req.stops} · ${esc(t('cap_n', { n: P.req.capacity }))} · ${esc(t('fin_' + P.req.finish))}</p><a class="link-btn" href="#/flow/NEEDS_SAVE/${esc(P.id)}">✏️ ${esc(t('change_needs'))}</a></div>
       <div class="card stack">${U.input('discount', c.discount, { label: t('discount_pct'), type: 'number', inputmode: 'decimal', min: 0, max: 90, step: '0.5', hint: t('discount_limit', { n: S.config.salesDiscountLimit }) })}
         <div class="seg">${[0, 2, 5, S.config.salesDiscountLimit].filter((x, i, a) => a.indexOf(x) === i).map(n => `<button type="button" data-a="set" data-k="discount" data-v="${n}" aria-pressed="${+c.discount === n}">${n}%</button>`).join('')}</div>
         <div id="q-live">${quoteLive(S, P, c, u)}</div>${U.input('note', c.note, { label: t('note_for_approver'), textarea: true })}</div>`,
@@ -362,7 +362,7 @@
   /* ---------- the office approves a price ---------- */
   FLOWS.QUOTE_APPROVE = {
     type: 'QUOTE_APPROVE', title: () => t('tk_approve_quote'),
-    steps: (P, c, S, u) => [{ render: () => { const q = A.lastQuote(P); return `${leadCard(P)}<div class="card stack"><div class="card-head"><h3>🧮 ${esc(t('quotation'))} v${q.v}</h3>${q.calc.why.map(w => U.chip(t('why_' + w), 'warn')).join('')}</div>${A.quoteTable(q.calc, true)}${kv([[t('made_by'), esc(U.userName(q.by))], [t('note'), esc(q.note)]])}</div>`; }, bar: decideBar('reject', '✗ ' + t('reject'), t('approve')) }],
+    steps: (P, c, S, u) => [{ render: () => { const q = A.lastQuote(P); return `${leadCard(P)}<div class="card stack"><div class="card-head"><h2 class="h3">🧮 ${esc(t('quotation'))} v${q.v}</h2>${q.calc.why.map(w => U.chip(t('why_' + w), 'warn')).join('')}</div>${A.quoteTable(q.calc, true)}${kv([[t('made_by'), esc(U.userName(q.by))], [t('note'), esc(q.note)]])}</div>`; }, bar: decideBar('reject', '✗ ' + t('reject'), t('approve')) }],
     actions: {
       reject: async (el, f) => {
         const out = await U.formSheet(t('reject'), U.field(t('reason_for_sales'), '<textarea data-x="note" maxlength="500"></textarea>', { req: true }), t('reject'), el2 => { const v = el2.querySelector('[data-x=note]').value.trim(); return v ? { note: v } : { err: 'err_note' }; });
@@ -380,7 +380,7 @@
     type: 'QUOTE_SEND', title: () => t('tk_send_quote'),
     init: () => ({ channel: 'whatsapp' }),
     steps: (P, c, S) => [{ render: () => { const q = A.lastQuote(P); return `${leadCard(P)}<div class="card stack center"><span class="muted">${esc(t('total'))}</span><div style="font-size:2rem;font-weight:800" class="num">${U.money(q.calc.total)}</div><span class="small muted">${esc(t('valid_days', { n: S.config.validityDays }))}</span><a class="btn sm" href="#/doc/quote/${esc(P.id)}">👁️ ${esc(t('view_quote'))}</a></div>
-      <div class="card stack"><h3>${esc(t('how_sent'))}</h3>${U.seg('channel', [['whatsapp', 'WhatsApp', '💬'], ['print', t('ch_print'), '🖨️'], ['inperson', t('ch_inperson'), '🤝']], c.channel, 'big cols3')}
+      <div class="card stack"><h2 class="h3">${esc(t('how_sent'))}</h2>${U.seg('channel', [['whatsapp', 'WhatsApp', '💬'], ['print', t('ch_print'), '🖨️'], ['inperson', t('ch_inperson'), '🤝']], c.channel, 'big cols3')}
       ${c.channel === 'whatsapp' ? `<a class="btn block" href="${esc(A.waLink(P))}" target="_blank" rel="noopener">💬 ${esc(t('open_whatsapp'))}</a>` : c.channel === 'print' ? `<a class="btn block" href="#/doc/quote/${esc(P.id)}">🖨️ ${esc(t('print'))}</a>` : ''}
       <p class="small muted">${esc(t('send_quote_note'))}</p></div>`; } }],
     submitLabel: () => t('mark_sent'),
@@ -413,7 +413,7 @@
   /* ---------- agreement ---------- */
   FLOWS.AGREE_PREPARE = {
     type: 'AGREE_PREPARE', title: () => t('tk_prepare_agreement'),
-    steps: (P, c, S) => [{ render: () => { const q = A.lastQuote(P), s = A.paySchedule(S.config, q.calc.total); return `${leadCard(P)}<div class="card stack"><h3>💰 ${esc(t('payment_terms'))}</h3><table class="money">${A.PURPOSES.filter(k => s[k]).map(k => `<tr><td>${esc(t('pay_' + k))}<br><span class="small muted">${esc(t('pw_' + k))}</span></td><td>${U.money(s[k])}</td></tr>`).join('')}<tr class="total"><td>${esc(t('total'))}</td><td>${U.money(q.calc.total)}</td></tr></table></div>
+    steps: (P, c, S) => [{ render: () => { const q = A.lastQuote(P), s = A.paySchedule(S.config, q.calc.total); return `${leadCard(P)}<div class="card stack"><h2 class="h3">💰 ${esc(t('payment_terms'))}</h2><table class="money">${A.PURPOSES.filter(k => s[k]).map(k => `<tr><td>${esc(t('pay_' + k))}<br><span class="small muted">${esc(t('pw_' + k))}</span></td><td>${U.money(s[k])}</td></tr>`).join('')}<tr class="total"><td>${esc(t('total'))}</td><td>${U.money(q.calc.total)}</td></tr></table></div>
       <div class="card"><p class="small">${esc(t('terms_text', { m: S.config.warrantyMonths, d: S.config.installDays, v: S.config.validityDays }))}</p></div>`; } }],
     submitLabel: () => t('prepare_agreement_btn'),
     submit: () => one('AGREE_PREPARE', {}),
@@ -444,8 +444,8 @@
       const upi = cfg.payUpi ? `upi://pay?pa=${encodeURIComponent(cfg.payUpi)}&pn=${encodeURIComponent(cfg.payName || S.org.name)}&am=${due}&cu=INR&tn=${encodeURIComponent(P.id + ' ' + c.purpose)}` : '';
       const refLab = c.mode === 'cash' ? t('receipt_no') : c.mode === 'cheque' ? t('cheque_no') : t('utr_no');
       return `<div class="card stack center"><span class="muted">${esc(t('pay_' + c.purpose))}</span><div style="font-size:2.1rem;font-weight:800" class="num">${U.money(due)}</div><span class="small muted">${esc(t('pw_' + c.purpose))}</span></div>
-        ${u.role === 'customer' ? `<div class="card stack"><h3>${esc(t('how_to_pay'))}</h3>${upi ? `<a class="btn primary block lg" href="${esc(upi)}">📱 ${esc(t('pay_upi_app'))}</a><p class="small muted center">UPI: <span class="mono">${esc(cfg.payUpi)}</span></p>` : `<p class="small muted">${esc(t('pay_ask_sales'))}</p>`}<p class="small">${esc(t('pay_company_only'))}</p></div>` : ''}
-        <div class="card stack"><h3>${esc(t(u.role === 'customer' ? 'after_paying' : 'payment_details'))}</h3>
+        ${u.role === 'customer' ? `<div class="card stack"><h2 class="h3">${esc(t('how_to_pay'))}</h2>${upi ? `<a class="btn primary block lg" href="${esc(upi)}">📱 ${esc(t('pay_upi_app'))}</a><p class="small muted center">UPI: <span class="mono">${esc(cfg.payUpi)}</span></p>` : `<p class="small muted">${esc(t('pay_ask_sales'))}</p>`}<p class="small">${esc(t('pay_company_only'))}</p></div>` : ''}
+        <div class="card stack"><h2 class="h3">${esc(t(u.role === 'customer' ? 'after_paying' : 'payment_details'))}</h2>
           ${U.field(t('pay_mode'), U.seg('mode', A.PAY_MODES.map(([k, em]) => [k, t('pm_' + k), em]), c.mode, 'cols2'))}
           ${U.input('ref', c.ref, { label: refLab, req: true, hint: t('ref_hint') })}
           <div class="photos">${U.photoSlot('proof', c.proof, t('proof_photo'), '🧾')}</div></div>
@@ -479,7 +479,7 @@
     steps: (P, c, S, u) => [{ render: () => {
       const done = A.PREP_ITEMS.filter(([k]) => P.prep[k]).length;
       return `${U.banner('🧱', esc(t('prep_intro')), 'gold')}<div class="row-flex"><b>${done}/${A.PREP_ITEMS.length}</b><div class="progress" style="flex:1"><i style="width:${Math.round(done / A.PREP_ITEMS.length * 100)}%"></i></div></div>
-        <div class="list">${A.PREP_ITEMS.map(([k, em]) => { const x = P.prep[k]; return `<div class="card stack"><div class="card-head" style="margin:0"><span class="avatar s" aria-hidden="true">${x ? '✅' : em}</span><h3>${esc(t('prep_' + k))}</h3></div><p class="small muted">${esc(t('prep_' + k + '_d'))}</p>${x ? `<div class="row-flex">${U.imgTag(x.photo) ? `<div class="thumbs">${U.imgTag(x.photo)}</div>` : ''}<span class="small muted">${esc(t('done_on', { d: U.fmtD(x.t) }))}</span></div>` : `<button type="button" class="btn dark block" data-a="itemPhoto" data-type="PREP_TICK" data-label="${esc(t('prep_' + k))}" data-d='${JSON.stringify({ item: k })}'>📷 ${esc(t('done_take_photo'))}</button>`}</div>`; }).join('')}</div>`;
+        <div class="list">${A.PREP_ITEMS.map(([k, em]) => { const x = P.prep[k]; return `<div class="card stack"><div class="card-head" style="margin:0"><span class="avatar s" aria-hidden="true">${x ? '✅' : em}</span><h2 class="h3">${esc(t('prep_' + k))}</h2></div><p class="small muted">${esc(t('prep_' + k + '_d'))}</p>${x ? `<div class="row-flex">${U.imgTag(x.photo) ? `<div class="thumbs">${U.imgTag(x.photo)}</div>` : ''}<span class="small muted">${esc(t('done_on', { d: U.fmtD(x.t) }))}</span></div>` : `<button type="button" class="btn dark block" data-a="itemPhoto" data-type="PREP_TICK" data-label="${esc(t('prep_' + k))}" data-d='${JSON.stringify({ item: k })}'>📷 ${esc(t('done_take_photo'))}</button>`}</div>`; }).join('')}</div>`;
     }, bar: (P2) => A.prepDone(P2) ? `<div class="actionbar"><button class="btn primary lg" type="button" data-a="flowNext">🔍 ${esc(t('tk_request_qc'))}</button></div>` : '' }],
     submit: () => one('QC_REQUEST', {}),
     what: () => t('what_qc_requested')
@@ -524,7 +524,7 @@
     steps: P => [{ render: () => {
       const scope = P.stage === 'site_fix' ? 'site' : 'install', open = A.openCorr(P, scope), done = P.corrections.filter(x => x.scope === scope && x.done);
       return `${U.banner('🛠️', esc(t(scope === 'site' ? 'fix_site_intro' : 'fix_install_intro')), 'warn')}
-        <div class="list">${open.map(x => `<div class="card stack"><h3>⬜ ${esc(t(x.k, x.v))}</h3><button type="button" class="btn dark block" data-a="itemPhoto" data-type="CORR_DONE" data-label="${esc(t(x.k, x.v))}" data-d='${JSON.stringify({ cid: x.id })}'>📷 ${esc(t('fixed_take_photo'))}</button></div>`).join('')}
+        <div class="list">${open.map(x => `<div class="card stack"><h2 class="h3">⬜ ${esc(t(x.k, x.v))}</h2><button type="button" class="btn dark block" data-a="itemPhoto" data-type="CORR_DONE" data-label="${esc(t(x.k, x.v))}" data-d='${JSON.stringify({ cid: x.id })}'>📷 ${esc(t('fixed_take_photo'))}</button></div>`).join('')}
         ${done.map(x => `<div class="card pad-s row-flex">✅ <span>${esc(t(x.k, x.v))}</span><span class="spacer"></span><span class="tiny muted">${esc(U.fmtD(x.done.t))}</span></div>`).join('')}</div>`;
     }, bar: P2 => { const scope = P2.stage === 'site_fix' ? 'site' : 'install'; return !A.openCorr(P2, scope).length ? `<div class="actionbar"><button class="btn primary lg" type="button" data-a="flowNext">${esc(t(scope === 'site' ? 'tk_request_qc' : 'tk_request_inspection'))} →</button></div>` : ''; } }],
     submit: P => one(P.stage === 'site_fix' ? 'QC_REQUEST' : 'INSPECT_REQUEST', {}),
@@ -535,10 +535,10 @@
   const loadOf = (S, uid, f) => Object.values(S.projects).filter(Q => Q[f] === uid && A.OPEN_STAGES.includes(Q.stage)).length;
   FLOWS.RELEASE = {
     type: 'RELEASE', title: () => t('tk_release'),
-    init: (P, S) => ({ tech: P.tech || A.firstActive(S, 'tech'), supplier: P.supplier || A.firstActive(S, 'supplier'), drawing: 'DWG-' + P.id.split('-').pop() + '-R1', needBy: A.addDays(7) }),
+    init: (P, S) => ({ tech: P.tech || (A.activeUsers(S, 'tech').sort((x, y) => loadOf(S, x.uid, 'tech') - loadOf(S, y.uid, 'tech') || x.name.localeCompare(y.name))[0] || {}).uid || '', supplier: P.supplier || A.firstActive(S, 'supplier'), drawing: 'DWG-' + P.id.split('-').pop() + '-R1', needBy: A.addDays(7) }),
     steps: (P, c, S) => [
-      { title: t('team'), render: () => `<div class="card stack"><h3>🔧 ${esc(t('pick_tech'))}</h3>${A.activeUsers(S, 'tech').length ? U.seg('tech', A.activeUsers(S, 'tech').map(x => [x.uid, x.name + ' · ' + t('open_jobs_n', { n: loadOf(S, x.uid, 'tech') })]), c.tech, 'cols2') : U.banner('⚠️', esc(t('no_tech_yet')), 'warn')}</div>
-        <div class="card stack"><h3>🏭 ${esc(t('pick_supplier'))}</h3>${A.activeUsers(S, 'supplier').length ? U.seg('supplier', A.activeUsers(S, 'supplier').map(x => [x.uid, x.name]), c.supplier, 'cols2') : U.banner('⚠️', esc(t('no_supplier_yet')), 'warn')}</div>`,
+      { title: t('team'), render: () => `<div class="card stack"><h2 class="h3">🔧 ${esc(t('pick_tech'))}</h2>${A.activeUsers(S, 'tech').length ? U.seg('tech', A.activeUsers(S, 'tech').map(x => [x.uid, x.name + ' · ' + t('open_jobs_n', { n: loadOf(S, x.uid, 'tech') })]), c.tech, 'cols2') : U.banner('⚠️', esc(t('no_tech_yet')), 'warn')}</div>
+        <div class="card stack"><h2 class="h3">🏭 ${esc(t('pick_supplier'))}</h2>${A.activeUsers(S, 'supplier').length ? U.seg('supplier', A.activeUsers(S, 'supplier').map(x => [x.uid, x.name]), c.supplier, 'cols2') : U.banner('⚠️', esc(t('no_supplier_yet')), 'warn')}</div>`,
         check: () => (!c.tech ? 'err_pick_tech' : !c.supplier ? 'err_pick_supplier' : null) },
       { title: t('material'), render: () => `<div class="card stack">${U.input('drawing', c.drawing, { label: t('drawing_ref'), req: true })}${U.input('needBy', c.needBy, { label: t('need_by'), type: 'date', min: A.todayStr(), req: true })}</div>
         <details class="fold" open><summary>📦 ${esc(t('material_list'))}</summary><div class="in"><table class="money">${A.materialList(P.req).map(m => `<tr><td>${esc(t(m.k))}</td><td>${m.q}</td></tr>`).join('')}</table></div></details>`,
@@ -553,7 +553,7 @@
   FLOWS.PO_ACCEPT = {
     type: 'PO_ACCEPT', title: () => t('tk_accept_po'),
     init: P => ({ date: P.po.needBy > A.todayStr() ? P.po.needBy : A.addDays(3) }),
-    steps: (P, c) => [{ render: () => `<div class="card stack"><h3>📑 ${esc(P.po.no)}</h3>${kv([[t('drawing'), esc(P.po.drawing)], [t('need_by'), esc(U.fmtD(P.po.needBy))], [t('site'), esc(P.lead.area || P.lead.address)]])}<table class="money">${P.po.items.map(m => `<tr><td>${esc(t(m.k))}</td><td>${m.q}</td></tr>`).join('')}</table></div>
+    steps: (P, c) => [{ render: () => `<div class="card stack"><h2 class="h3">📑 ${esc(P.po.no)}</h2>${kv([[t('drawing'), esc(P.po.drawing)], [t('need_by'), esc(U.fmtD(P.po.needBy))], [t('site'), esc(P.lead.area || P.lead.address)]])}<table class="money">${P.po.items.map(m => `<tr><td>${esc(t(m.k))}</td><td>${m.q}</td></tr>`).join('')}</table></div>
       <div class="card stack">${U.input('date', c.date, { label: t('dispatch_date'), type: 'date', min: A.todayStr(), req: true })}</div>`,
       check: () => (!c.date || c.date < A.todayStr() ? 'err_date_past' : null) }],
     submitLabel: () => t('accept_po_btn'), submit: (P, c) => one('PO_ACCEPT', { date: c.date }), what: (P, c) => t('what_po_accepted', { d: U.fmtD(c.date) })
@@ -595,7 +595,7 @@
   FLOWS.SAFETY = {
     type: 'SAFETY', title: () => t('tk_safety_check'),
     init: () => ({ ph: {} }),
-    steps: (P, c) => [{ render: () => `${U.banner('🦺', esc(t('safety_intro')), 'warn')}<div class="list">${A.SAFETY_ITEMS.map(([k, em]) => `<div class="card stack"><div class="card-head" style="margin:0"><span class="avatar s" aria-hidden="true">${em}</span><div><h3>${esc(t('safe_' + k))}</h3><p class="small muted">${esc(t('safe_' + k + '_d'))}</p></div></div><div class="photos">${U.photoSlot('ph.' + k, c.ph[k], t('safe_' + k), em)}</div></div>`).join('')}</div>`,
+    steps: (P, c) => [{ render: () => `${U.banner('🦺', esc(t('safety_intro')), 'warn')}<div class="list">${A.SAFETY_ITEMS.map(([k, em]) => `<div class="card stack"><div class="card-head" style="margin:0"><span class="avatar s" aria-hidden="true">${em}</span><div><h2 class="h3">${esc(t('safe_' + k))}</h2><p class="small muted">${esc(t('safe_' + k + '_d'))}</p></div></div><div class="photos">${U.photoSlot('ph.' + k, c.ph[k], t('safe_' + k), em)}</div></div>`).join('')}</div>`,
       check: () => (!A.SAFETY_ITEMS.every(([k]) => c.ph[k]) ? 'err_safety_photos' : null) }],
     submitLabel: () => t('safety_btn'), submit: (P, c) => one('SAFETY', { photos: c.ph }), what: () => t('what_safety')
   };
@@ -638,7 +638,7 @@
   FLOWS.HAND_SIGN = {
     type: 'HAND_SIGN', title: (P, c) => t('sign_as', { who: t('slot_' + c.slot) }),
     init: (P, S, u, q) => ({ slot: ['customer', 'tech', 'qc'].includes(q.slot) ? q.slot : 'customer', name: (q.slot || 'customer') === 'customer' ? P.lead.name : u.name }),
-    steps: (P, c, S, u) => [{ render: () => `${leadCard(P)}<div class="card stack"><h3>✍️ ${esc(t('handover_title'))}</h3><p class="small">${esc(t('handover_say_' + c.slot))}</p>
+    steps: (P, c, S, u) => [{ render: () => `${leadCard(P)}<div class="card stack"><h2 class="h3">✍️ ${esc(t('handover_title'))}</h2><p class="small">${esc(t('handover_say_' + c.slot))}</p>
       <div class="row-flex">${['customer', 'tech', 'qc'].map(s => U.chip((P.hand[s] ? '✅ ' : '⬜ ') + t('slot_' + s), P.hand[s] ? 'ok' : '')).join('')}</div></div>
       ${c.slot === 'customer' && u.role !== 'customer' ? U.banner('🤝', esc(t('hand_phone_customer')), 'gold') : ''}
       <div class="card stack">${U.input('name', c.name, { label: t('signer_name'), req: true })}${sigBlock()}</div>`, check: () => (!A.str(c.name) ? 'err_name' : sigCheck()) }],
@@ -648,7 +648,7 @@
   };
   FLOWS.HAND_COMPLETE = {
     type: 'HAND_COMPLETE', title: () => t('tk_complete_handover'),
-    steps: (P, c, S) => [{ render: () => `${leadCard(P)}<div class="card stack"><h3>✍️ ${esc(t('signatures'))}</h3>${['customer', 'tech', 'qc'].map(s => `<div class="row-flex"><b style="min-width:110px">${esc(t('slot_' + s))}</b><img class="sig-img" data-blob="${esc(P.hand[s].sig)}" alt="${esc(t('signature'))}" style="flex:1;max-width:220px"><span class="small">${esc(P.hand[s].name)}</span></div>`).join('')}</div>
+    steps: (P, c, S) => [{ render: () => `${leadCard(P)}<div class="card stack"><h2 class="h3">✍️ ${esc(t('signatures'))}</h2>${['customer', 'tech', 'qc'].map(s => `<div class="row-flex"><b style="min-width:110px">${esc(t('slot_' + s))}</b><img class="sig-img" data-blob="${esc(P.hand[s].sig)}" alt="${esc(t('signature'))}" style="flex:1;max-width:220px"><span class="small">${esc(P.hand[s].name)}</span></div>`).join('')}</div>
       <div class="card">${kv([[t('warranty'), esc(t('months_n', { n: S.config.warrantyMonths }))], [t('amc_visits'), esc(t('per_year', { n: S.config.amcVisits }))], [t('paid_of_total'), P.agreement ? `${U.money(A.paidTotal(P))} / ${U.money(P.agreement.total)}` : '']])}</div>` }],
     submitLabel: () => t('complete_btn'), submit: () => one('HAND_COMPLETE', {}),
     what: P => t('what_handover_done', { code: P.done.liftCode }),
@@ -717,6 +717,25 @@
       check: () => (A.str(c.no).length < 3 ? 'err_stat_no' : !c.date || c.date > A.todayStr() ? 'err_stat_date' : c.kind === 'licence' && (!c.expiry || c.expiry <= A.todayStr()) ? 'err_stat_expiry' : !c.doc ? 'err_photo' : null) }],
     submitLabel: () => t('save'), submit: (P, c) => one('STAT_RECORD', { kind: c.kind, no: c.no, date: c.date, expiry: c.kind === 'licence' ? c.expiry : '', authority: c.authority, doc: c.doc }),
     what: (P, c) => t('what_stat_' + c.kind)
+  };
+
+  /* ---------- work pay: approve a finished week, then pay it ---------- */
+  const payItems = w => `<div class="card stack"><div class="row-flex"><span class="avatar s" aria-hidden="true">${A.ROLE_ICON[(A.Store.S.users[w.uid] || {}).role] || '👤'}</span><div style="flex:1"><b>${esc(U.userName(w.uid))}</b><div class="small muted">${esc(t('week_of', { d: U.fmtD(w.week) }))}</div></div><b class="num" style="font-size:1.3rem">${U.money(w.approved ? w.approved.amount : w.total)}</b></div>
+    <table class="money">${w.items.map(x => `<tr><td>${esc(t('earn_' + x.kind, { n: x.n }))}<br><span class="small muted">${esc(x.pid)} · ${esc(U.fmtD(x.t))}</span></td><td>${U.money(x.amount)}</td></tr>`).join('')}</table></div>`;
+  FLOWS.PAY_APPROVE = {
+    type: 'PAY_WEEK_APPROVE', title: () => t('tk_approve_pay'),
+    init: (P, S, u, q) => ({ uid: q.uid, week: q.week }),
+    steps: (P, c, S) => [{ render: () => `${payItems(A.payWeek(S, c.uid, c.week))}<p class="small muted">🧾 ${esc(t('approve_pay_rule'))}</p>` }],
+    submitLabel: () => t('approve'), submit: (P, c) => one('PAY_WEEK_APPROVE', { uid: c.uid, week: c.week }, ''),
+    what: (P, c) => t('what_pay_approved', { name: U.userName(c.uid) })
+  };
+  FLOWS.PAY_PAID = {
+    type: 'PAY_WEEK_PAID', title: () => t('tk_pay_week'),
+    init: (P, S, u, q) => ({ uid: q.uid, week: q.week, ref: '' }),
+    steps: (P, c, S) => [{ render: () => `${payItems(A.payWeek(S, c.uid, c.week))}<div class="card stack">${U.input('ref', c.ref, { label: t('utr_no'), req: true, hint: t('ref_hint') })}</div>`,
+      check: () => (A.str(c.ref).length < 4 ? 'err_ref' : null) }],
+    submitLabel: () => t('mark_paid'), submit: (P, c) => one('PAY_WEEK_PAID', { uid: c.uid, week: c.week, ref: c.ref }, ''),
+    what: (P, c) => t('what_week_paid', { name: U.userName(c.uid) })
   };
 
   /* ---------- a login for the customer ---------- */
