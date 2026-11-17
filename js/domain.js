@@ -114,6 +114,11 @@
     11: { k: 'level', unit: 'mm', min: 0, max: 10 }
   };
   const SAFETY_ITEMS = [['ppe', '⛑️'], ['scaffold', '🪜'], ['barricade', '🚧'], ['earthing', '⚡']];
+  /* statutory records (Maharashtra Lifts, Escalators and Moving Walks Act 2017; Rules 2026):
+     an erection permit before installation starts, a lift licence before the lift is handed over */
+  const STAT_KINDS = ['permit', 'licence'];
+  const STAT_STAGES = { permit: ['site_prep', 'qc_site', 'site_fix', 'site_ok', 'material_order', 'dispatched', 'arrived', 'installing'], licence: ['installing', 'qc_final', 'install_fix', 'final_pay', 'handover', 'amc'] };
+  const HOLD_REASONS = [['customer', '🏠'], ['supplier', '🏭'], ['weather', '🌧️'], ['payment', '💰'], ['other', '❔']];
   const BLOCK_REASONS = [['material', '📦', 'supplier'], ['site', '🏗️', 'sales'], ['power', '⚡', 'sales'], ['help', '🙋', 'admin'], ['safety', '⚠️', 'admin']];
   const AMC_CHECKS = ['ride', 'doors', 'alarm', 'brake', 'ropes', 'oil', 'pit'];
   const TICKET_KINDS = [['breakdown', '🚨'], ['complaint', '😟'], ['request', '🙋']];
@@ -138,7 +143,7 @@
     token: 10000, arrivalPct: 70, cabinPct: 20,
     installDays: 14, warrantyMonths: 12, amcVisits: 4, validityDays: 30,
     tolWidth: 1500, tolDepth: 1500, tolPit: 1200, tolHead: 3800,
-    dailySafety: 1, escalateDays: 2, slaTicketHours: 24, amcPrice: 15000,
+    dailySafety: 1, permitGate: 1, licenceGate: 1, escalateDays: 2, slaTicketHours: 24, amcPrice: 15000,
     payUpi: '', payName: '', officePhone: ''
   };
   /* the lowest and highest value each rule may take (checked by the rule, not only the input box) */
@@ -147,7 +152,7 @@
     cap4: [0, 5e6], cap6: [0, 5e6], cap8: [0, 5e6], cap10: [0, 5e6], cap13: [0, 5e6], costArd: [0, 5e6], costCurtain: [0, 5e6], costPremium: [0, 5e6],
     install: [0, 5e6], transport: [0, 5e6], gst: [0, 28], targetMargin: [1, 90], salesDiscountLimit: [0, 50], adminDiscountLimit: [0, 50], minMargin: [0, 90],
     token: [0, 500000], arrivalPct: [0, 100], cabinPct: [0, 100], installDays: [1, 180], warrantyMonths: [0, 120], amcVisits: [0, 24], validityDays: [1, 365],
-    tolWidth: [300, 10000], tolDepth: [300, 10000], tolPit: [300, 10000], tolHead: [300, 10000], dailySafety: [0, 1], escalateDays: [1, 30], slaTicketHours: [1, 720], amcPrice: [0, 2e6]
+    tolWidth: [300, 10000], tolDepth: [300, 10000], tolPit: [300, 10000], tolHead: [300, 10000], dailySafety: [0, 1], permitGate: [0, 1], licenceGate: [0, 1], escalateDays: [1, 30], slaTicketHours: [1, 720], amcPrice: [0, 2e6]
   };
   const TEXT_CFG = { payUpi: /^$|^[\w.\-]{2,}@[a-zA-Z]{2,}$/, payName: /^[^<>]{0,60}$/, officePhone: /^$|^[6-9]\d{9}$/ };
   const RULE_GROUPS = {
@@ -155,6 +160,7 @@
     margins: ['targetMargin', 'salesDiscountLimit', 'adminDiscountLimit', 'minMargin'],
     payments: ['token', 'arrivalPct', 'cabinPct', 'payUpi', 'payName'],
     work: ['installDays', 'validityDays', 'dailySafety', 'escalateDays'],
+    statutory: ['permitGate', 'licenceGate'],
     quality: ['tolWidth', 'tolDepth', 'tolPit', 'tolHead'],
     service: ['warrantyMonths', 'amcVisits', 'amcPrice', 'slaTicketHours', 'officePhone']
   };
@@ -244,7 +250,7 @@
     id, t: ev.t, createdBy: ev.by, stage: 'new', since: ev.t, lead: {}, sales: '', qc: '', tech: '', supplier: '', customer: '',
     req: null, quotes: [], agreement: null, schedule: null, payments: [], prep: {}, qcSite: [], corrections: [], po: null,
     dispatch: null, arrival: null, mhand: null, sop: [], safety: {}, qcFinal: [], hand: {}, done: null,
-    amc: { visits: [], tickets: [] }, blockers: [], chat: [], history: [], followUp: null, returnReason: '', lostReason: ''
+    amc: { visits: [], tickets: [] }, blockers: [], statutory: {}, holds: [], chat: [], history: [], followUp: null, returnReason: '', lostReason: ''
   });
   const activeUsers = (S, role) => Object.values(S.users).filter(u => u.active && (!role || u.role === role));
   const firstActive = (S, role) => { const a = activeUsers(S, role).sort((x, y) => x.name.localeCompare(y.name)); return a.length ? a[0].uid : ''; };
@@ -629,6 +635,7 @@
       guard: (S, u, P, ev) => {
         if (sopNext(P) >= SOP.length) return 'err_all_steps_done';
         if (P.blockers.some(b => b.open && b.reason === 'safety')) return 'err_work_stopped';
+        if (+S.config.permitGate && sopNext(P) === 0 && !P.statutory.permit) return 'err_wait_permit';
         if (+S.config.dailySafety && !safetyToday(P, ev && ev.t)) return 'err_safety_first';
         if (P.schedule && P.schedule.cabin && sopNext(P) >= CABIN_STEP && !payConfirmed(P, 'cabin')) return 'err_wait_cabin';
         return null;
@@ -673,7 +680,7 @@
     },
     HAND_COMPLETE: {
       roles: ['admin', 'owner', 'qc'], stages: ['handover'],
-      guard: (S, u, P) => (!['customer', 'tech', 'qc'].every(s => P.hand[s]) ? 'err_signatures_left' : null),
+      guard: (S, u, P, ev) => (!['customer', 'tech', 'qc'].every(s => P.hand[s]) ? 'err_signatures_left' : +S.config.licenceGate && !licenceOk(P, ev && ev.t) ? 'err_need_licence' : null),
       apply: (S, ev, P) => {
         P.done = { t: ev.t, by: ev.by, warrantyMonths: +S.config.warrantyMonths, amcVisits: +S.config.amcVisits, liftCode: 'L-' + P.id.split('-').pop() + '-' + sha256(ev.id).slice(0, 4).toUpperCase() };
         setStage(P, 'amc', ev);
@@ -707,6 +714,32 @@
         return !str(d.note) ? 'err_note' : null;
       },
       apply: (S, ev, P) => { P.amc.tickets.find(k => k.id === ev.d.tid).closed = { t: ev.t, by: ev.by, cause: ev.d.cause, note: str(ev.d.note), photo: ev.d.photo || '' }; }
+    },
+
+    /* ----- statutory records and holds ----- */
+    STAT_RECORD: {
+      roles: OFFICE,
+      guard: (S, u, P) => (STAT_KINDS.some(k => STAT_STAGES[k].includes(P.stage)) ? null : 'err_stage'),
+      check: (S, d, P) => {
+        if (!STAT_KINDS.includes(d.kind) || !STAT_STAGES[d.kind].includes(P.stage)) return 'err_stage';
+        if (str(d.no).length < 3) return 'err_stat_no';
+        if (!/^\d{4}-\d\d-\d\d$/.test(d.date || '') || d.date > todayStr()) return 'err_stat_date';
+        if (d.kind === 'licence' && (!/^\d{4}-\d\d-\d\d$/.test(d.expiry || '') || d.expiry <= todayStr())) return 'err_stat_expiry';
+        if (!d.doc) return 'err_photo';
+        return null;
+      },
+      apply: (S, ev, P) => { const d = ev.d; P.statutory[d.kind] = { no: str(d.no), date: d.date, expiry: d.kind === 'licence' ? d.expiry : '', authority: str(d.authority), doc: d.doc, t: ev.t, by: ev.by }; }
+    },
+    HOLD_START: {
+      roles: OFFICE, stages: OPEN_STAGES,
+      guard: (S, u, P) => (onHold(P) ? 'err_on_hold' : null),
+      check: (S, d) => (!HOLD_REASONS.some(([k]) => k === d.reason) ? 'err_reason' : !str(d.note) ? 'err_note' : null),
+      apply: (S, ev, P) => { P.holds.push({ reason: ev.d.reason, note: str(ev.d.note), from: ev.t, by: ev.by, to: null }); }
+    },
+    HOLD_END: {
+      roles: OFFICE,
+      guard: (S, u, P) => (onHold(P) ? null : 'err_not_on_hold'),
+      apply: (S, ev, P) => { const h = P.holds[P.holds.length - 1]; h.to = ev.t; h.endBy = ev.by; }
     },
 
     /* ----- problems and messages ----- */
@@ -743,6 +776,9 @@
     }
     return null;
   }
+
+  const onHold = P => !!P.holds && P.holds.some(h => !h.to);
+  const licenceOk = (P, at) => { const l = (P.statutory || {}).licence; return !!l && l.expiry > dayOf(at || nowISO()); };
 
   /* the one guard used by buttons, task lists and saving: role, assignment, stage, visibility */
   function guard(S, uid, type, pid, ev) {
@@ -829,6 +865,7 @@
         break;
       case 'installing': {
         const n = sopNext(P);
+        if (+c.permitGate && n === 0 && !P.statutory.permit) { add('wait_permit', ['tech'], { field: 'tech', info: true }); break; }
         if (P.schedule && P.schedule.cabin && !payConfirmed(P, 'cabin')) {
           const ok = payNeed('cabin');
           if (!ok && n >= CABIN_STEP && n < SOP.length) { add('wait_cabin_pay', ['tech'], { field: 'tech', info: true }); break; }
@@ -859,6 +896,9 @@
         break;
       }
     }
+    if (+c.permitGate && !P.statutory.permit && STAT_STAGES.permit.includes(P.stage) && stageIdx(P.stage) >= stageIdx('site_ok')) add('record_permit', ['admin', 'owner'], { type: 'STAT_RECORD', kind: 'permit', urgent: P.stage === 'installing' || P.stage === 'arrived' });
+    if (+c.licenceGate && !licenceOk(P) && ['final_pay', 'handover'].includes(P.stage)) add('record_licence', ['admin', 'owner'], { type: 'STAT_RECORD', kind: 'licence', urgent: P.stage === 'handover' });
+    if (P.stage === 'amc' && P.statutory.licence && P.statutory.licence.expiry <= addDays(60)) add('renew_licence', ['admin', 'owner'], { type: 'STAT_RECORD', kind: 'licence', due: P.statutory.licence.expiry, urgent: P.statutory.licence.expiry <= addDays(7) });
     if (P.stage === 'quoted' && P.followUp && P.followUp.due <= todayStr()) { const g = out.find(x => x.k === 'get_decision'); if (g) g.urgent = true; }
     for (const b of P.blockers) if (b.open) add('resolve_blocker', uniq([(BLOCK_REASONS.find(x => x[0] === b.reason) || [])[2], 'admin', 'owner']), { bid: b.id, type: 'BLOCKER_RESOLVE', since: b.t, urgent: true });
     return out.map(x => Object.assign(x, lateness(S, P, x)));
@@ -873,7 +913,7 @@
       if (days != null) due = addDays(days, new Date(P.stage === 'installing' && P.mhand ? P.mhand.t : task.since));
     }
     const today = todayStr();
-    const lateDays = due && due < today ? daysBetween(due + 'T00:00:00', today + 'T00:00:00') : 0;
+    const lateDays = !onHold(P) && due && due < today ? daysBetween(due + 'T00:00:00', today + 'T00:00:00') : 0;
     return { dueDay: due, lateDays, late: lateDays > 0, stuck: lateDays >= +c.escalateDays };
   }
   /* is this task for this person? Their role, and the job is theirs (or nobody's) */
@@ -934,6 +974,7 @@
     CONTACT_ROLES, SHAFT, LOST_REASONS, RETURN_REASONS, CALL_OUTCOMES, PREP_ITEMS, QC_SITE_CHECKS, QC_SITE_MEAS, QC_FINAL_CHECKS,
     SOP, CABIN_STEP, SOP_READ, SAFETY_ITEMS, BLOCK_REASONS, AMC_CHECKS, TICKET_KINDS, SEVERITIES, ROOT_CAUSES, PAY_MODES,
     LIFT_TYPES, CAPACITIES, FINISHES, JOB_KINDS, USES, TIMELINES, PURPOSES, PAY_STAGE,
+    STAT_KINDS, STAT_STAGES, HOLD_REASONS, onHold, licenceOk,
     DEFAULT_CONFIG, CFG_LIMITS, TEXT_CFG, RULE_GROUPS,
     calcQuote, paySchedule, materialList, lastQuote, quoteValidTill, quoteExpired, activePay, payConfirmed, paidTotal, dueOf, payOpen,
     sopNext, prepDone, openCorr, safetyToday, leadHeat, warrantyEnd, amcDue, nextAmc,

@@ -87,13 +87,14 @@
 
   function blockedView(g, P, S, title, back, def) {
     const k = typeof g === 'object' ? g.k : g;
-    const waits = { err_wait_payment: '💰', err_wait_cabin: '💰', err_safety_first: '🦺', err_accept_po_first: '📑', err_prep_first: '🧱', err_fix_first: '🛠️', err_steps_left: '🔧', err_signatures_left: '✍️', err_work_stopped: '⛔', err_quote_expired: '⌛' };
+    const waits = { err_wait_payment: '💰', err_wait_cabin: '💰', err_safety_first: '🦺', err_accept_po_first: '📑', err_prep_first: '🧱', err_fix_first: '🛠️', err_steps_left: '🔧', err_signatures_left: '✍️', err_work_stopped: '⛔', err_quote_expired: '⌛', err_need_licence: '⚖️', err_wait_permit: '⚖️' };
     let extra = '';
     if (k === 'err_safety_first' && P) extra = `<a class="btn primary block lg" href="#/flow/SAFETY/${esc(P.id)}">🦺 ${esc(t('tk_safety_check'))}</a>`;
     if (k === 'err_quote_expired' && P) extra = `<a class="btn primary block lg" href="#/flow/QUOTE_MAKE/${esc(P.id)}">🧮 ${esc(t('tk_make_quote'))}</a>`;
+    if ((k === 'err_need_licence' || k === 'err_wait_permit') && P && A.can(S, A.Session.uid, 'STAT_RECORD', P.id)) extra = `<a class="btn primary block lg" href="#/flow/STAT_RECORD/${esc(P.id)}?kind=${k === 'err_need_licence' ? 'licence' : 'permit'}">⚖️ ${esc(t(k === 'err_need_licence' ? 'tk_record_licence' : 'tk_record_permit'))}</a>`;
     if (k === 'err_fix_first' && P) extra = `<a class="btn primary block lg" href="#/flow/FIX/${esc(P.id)}">🛠️ ${esc(t('tk_fix_site'))}</a>`;
     const w = P ? A.waitingOn(S, P) : null;
-    return { title, sub: P ? P.id : '', back, body: `<div class="stack-l">${U.empty(waits[k] || '🔒', U.errText(g), w && k !== 'err_stage' ? t('waiting_for', { who: A.whoFor(S, P, w.task) }) + ' — ' + U.taskTitle(w.task) : '')}${extra}<a class="btn block" href="#${back}">${esc(P ? t('open_project') : t('nav_home'))}</a></div>` };
+    return { title, sub: P ? P.id : '', back, body: `<div class="stack-l">${U.empty(waits[k] || '🔒', U.errText(g), w && !['err_stage', 'err_need_licence', 'err_wait_permit'].includes(k) ? t('waiting_for', { who: A.whoFor(S, P, w.task) }) + ' — ' + U.taskTitle(w.task) : '')}${extra}<a class="btn block" href="#${back}">${esc(P ? t('open_project') : t('nav_home'))}</a></div>` };
   }
 
   function doneView(f, S, u, P0, title) {
@@ -703,6 +704,19 @@
     steps: (P, c) => [{ render: () => { const b = P.blockers.find(x => x.id === c.bid); if (!b || !b.open) return U.banner('ℹ️', esc(t('err_item'))); return `<div class="card stack"><div class="row-flex">${U.chip(t('br_' + b.reason), 'bad')}<span class="spacer"></span><span class="tiny muted">${esc(U.userName(b.by))} · ${esc(U.ago(b.t))}</span></div><p>${esc(b.text)}</p>${b.photo ? `<div class="thumbs">${U.imgTag(b.photo)}</div>` : ''}</div><div class="card stack">${U.input('note', c.note, { label: t('how_solved'), textarea: true, mic: true, req: true })}</div>`; },
       check: () => (!A.str(c.note) ? 'err_note' : null) }],
     submitLabel: () => t('mark_solved'), submit: (P, c) => one('BLOCKER_RESOLVE', c), what: () => t('what_blocker_solved')
+  };
+
+  /* ---------- statutory records: erection permit, lift licence ---------- */
+  FLOWS.STAT_RECORD = {
+    type: 'STAT_RECORD', title: (P, c) => t('stat_title_' + c.kind),
+    init: (P, S, u, q) => ({ kind: A.STAT_KINDS.includes(q.kind) ? q.kind : (A.STAT_STAGES.permit.includes(P.stage) && !P.statutory.permit ? 'permit' : 'licence'), no: '', date: A.todayStr(), expiry: A.addDays(365), authority: '', doc: '' }),
+    steps: (P, c) => [{ render: () => `${leadCard(P)}${U.banner('⚖️', esc(t('stat_why_' + c.kind)), 'gold')}
+      <div class="card stack">${U.input('no', c.no, { label: t('stat_no_' + c.kind), req: true })}${U.input('authority', c.authority, { label: t('stat_authority') + ' (' + t('optional') + ')' })}
+      ${U.input('date', c.date, { label: t('stat_date'), type: 'date', max: A.todayStr(), req: true })}${c.kind === 'licence' ? U.input('expiry', c.expiry, { label: t('stat_expiry'), type: 'date', min: A.addDays(1), req: true }) : ''}
+      <div class="photos">${U.photoSlot('doc', c.doc, t('stat_doc') + ' *', '📄')}</div></div>`,
+      check: () => (A.str(c.no).length < 3 ? 'err_stat_no' : !c.date || c.date > A.todayStr() ? 'err_stat_date' : c.kind === 'licence' && (!c.expiry || c.expiry <= A.todayStr()) ? 'err_stat_expiry' : !c.doc ? 'err_photo' : null) }],
+    submitLabel: () => t('save'), submit: (P, c) => one('STAT_RECORD', { kind: c.kind, no: c.no, date: c.date, expiry: c.kind === 'licence' ? c.expiry : '', authority: c.authority, doc: c.doc }),
+    what: (P, c) => t('what_stat_' + c.kind)
   };
 
   /* ---------- a login for the customer ---------- */

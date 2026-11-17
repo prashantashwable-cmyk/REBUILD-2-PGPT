@@ -20,11 +20,12 @@
       case 'sign_handover': return '/flow/HAND_SIGN/' + p + '?slot=' + k.slot;
       case 'close_ticket': return '/flow/TICKET_CLOSE/' + p + '?tid=' + k.tid;
       case 'resolve_blocker': return '/flow/BLOCKER_RESOLVE/' + p + '?bid=' + k.bid;
+      case 'record_permit': case 'record_licence': case 'renew_licence': return '/flow/STAT_RECORD/' + p + '?kind=' + k.kind;
       default: return '/flow/' + k.type + '/' + p;
     }
   }
   A.taskPath = taskPath;
-  const TASK_EM = { review_lead: '🆕', fix_lead: '↩️', call_customer: '📞', write_needs: '📝', make_quote: '🧮', approve_quote: '⏳', send_quote: '📤', get_decision: '🤝', prepare_agreement: '📄', sign_agreement: '✍️', record_payment: '💰', verify_payment: '🏦', prepare_site: '🧱', request_qc: '🔍', inspect_site: '🔍', fix_site: '🛠️', release: '📐', accept_po: '📑', dispatch: '🚚', arrival: '📍', material_handover: '📦', wait_payment: '⏳', wait_cabin_pay: '⏳', safety_check: '🦺', install: '🔧', request_inspection: '🙋', final_inspect: '🔍', fix_install: '🛠️', sign_handover: '✍️', complete_handover: '🔑', amc_visit: '🛠️', close_ticket: '🚨', resolve_blocker: '⚠️' };
+  const TASK_EM = { review_lead: '🆕', fix_lead: '↩️', call_customer: '📞', write_needs: '📝', make_quote: '🧮', approve_quote: '⏳', send_quote: '📤', get_decision: '🤝', prepare_agreement: '📄', sign_agreement: '✍️', record_payment: '💰', verify_payment: '🏦', prepare_site: '🧱', request_qc: '🔍', inspect_site: '🔍', fix_site: '🛠️', release: '📐', accept_po: '📑', dispatch: '🚚', arrival: '📍', material_handover: '📦', wait_payment: '⏳', wait_cabin_pay: '⏳', safety_check: '🦺', install: '🔧', request_inspection: '🙋', final_inspect: '🔍', fix_install: '🛠️', sign_handover: '✍️', complete_handover: '🔑', amc_visit: '🛠️', close_ticket: '🚨', resolve_blocker: '⚠️', record_permit: '📝', record_licence: '📜', renew_licence: '📜', wait_permit: '📝' };
   const taskEm = k => TASK_EM[k.k] || '•';
   const custLabel = P => P.lead.name + (P.lead.area ? ' · ' + P.lead.area : P.lead.building ? ' · ' + P.lead.building : '');
   function dueChip(k) {

@@ -26,7 +26,7 @@
     ['Dr. Rao', '9822100009', 'Viman Nagar', 'Rao Clinic', 3, 'site_prep', 6, { prepDone: 3, cust: 'u_cust2' }],
     ['Mr. Iyer', '9822100010', 'Kalyani Nagar', 'Iyer House', 4, 'qc_site', 2, {}],
     ['Mr. Naik', '9822100011', 'Pashan', 'Naik Enclave', 5, 'site_ok', 4, {}],
-    ['Mrs. Mehta', '9822100012', 'Kondhwa', 'Mehta Apartments', 6, 'material_order', 3, {}],
+    ['Mrs. Mehta', '9822100012', 'Kondhwa', 'Mehta Apartments', 6, 'material_order', 3, { hold: true }],
     ['Mr. Sawant', '9822100013', 'Warje', 'Sawant Niwas', 4, 'arrived', 2, {}],
     ['Mr. Kadam', '9822100014', 'Sinhagad Road', 'Kadam Heights', 5, 'installing', 3, { steps: 4, tech: 'u_tech1' }],
     ['Mr. Patwardhan', '9822100015', 'Erandwane', 'Patwardhan Wada', 3, 'qc_final', 1, { tech: 'u_tech2' }],
@@ -104,7 +104,7 @@
           A.PREP_ITEMS.forEach(([k]) => { if (!P().prep[k]) run(o.cust || 'u_sales', 'PREP_TICK', pid, { item: k, photo: photo[2] }); });
           run('u_sales', 'QC_REQUEST', pid);
         } else if (st === 'qc_site') run('u_qc', 'QC_SITE', pid, { checks: Object.fromEntries(A.QC_SITE_CHECKS.map(k => [k, 'pass'])), meas: { width: 1650, depth: 1600, pit: 1400, head: 4000 }, photos: [photo[2]] });
-        else if (st === 'site_ok') run('u_admin', 'RELEASE', pid, { tech: o.tech || (i % 2 ? 'u_tech2' : 'u_tech1'), supplier: 'u_sup', drawing: 'DWG-P' + (i + 1) + '-R1', needBy: A.addDays(10, new Date(clock)) });
+        else if (st === 'site_ok') { if (!p.statutory.permit) run('u_admin', 'STAT_RECORD', pid, { kind: 'permit', no: 'EP/PUN/26/' + (100 + i), date: A.todayStr(new Date(clock)), authority: 'Lift Inspector, Pune', doc: photo[2] }); run('u_admin', 'RELEASE', pid, { tech: o.tech || (i % 2 ? 'u_tech2' : 'u_tech1'), supplier: 'u_sup', drawing: 'DWG-P' + (i + 1) + '-R1', needBy: A.addDays(10, new Date(clock)) }); }
         else if (st === 'material_order') {
           if (!p.po.accepted) run('u_sup', 'PO_ACCEPT', pid, { date: A.addDays(2, new Date(clock)) });
           else run('u_sup', 'DISPATCH', pid, { vehicle: 'MH12AB' + (1000 + i), driver: 'Rajesh', photos: [photo[3]] });
@@ -130,9 +130,11 @@
           else run('u_fin', 'PAY_VERIFY', pid, { payId: A.activePay(p, 'final').id, ok: true });
         } else if (st === 'handover') {
           for (const s of ['customer', 'tech', 'qc']) if (!P().hand[s]) run(s === 'customer' ? (p.customer || p.tech) : s === 'tech' ? p.tech : 'u_qc', 'HAND_SIGN', pid, { slot: s, sig: PS, name: s === 'customer' ? name : s === 'tech' ? (S.users[p.tech] || {}).name : 'Vijay Shinde' });
+          if (!A.licenceOk(P(), new Date(clock).toISOString())) run('u_admin', 'STAT_RECORD', pid, { kind: 'licence', no: 'LIC/PUN/26/' + (500 + i), date: A.todayStr(new Date(clock)), expiry: A.addDays(365, new Date(clock)), authority: 'Lift Inspector, Pune', doc: photo[2] });
           run('u_admin', 'HAND_COMPLETE', pid);
         } else break;
       }
+      if (o.hold) run('u_admin', 'HOLD_START', pid, { reason: 'supplier', note: 'Controller panel stock arrives next week.' });
       if (o.ticket) { clock = Date.now() - 3 * 3600e3; run(o.cust || 'u_sales', 'TICKET_OPEN', pid, { kind: 'breakdown', severity: 'breakdown', text: 'Lift door does not close fully on 2nd floor.' }); }
     });
     /* a little conversation, so chat is not empty */

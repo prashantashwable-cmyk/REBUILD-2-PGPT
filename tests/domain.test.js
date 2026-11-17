@@ -123,6 +123,11 @@ act('u_fin', 'PAY_VERIFY', pid, { payId: P.payments[2].id, ok: true }, true);
 const all = Object.fromEntries(P.po.items.map(m => [m.k, true]));
 act('u_tch', 'MHAND', pid, { checked: all, photos: ['m1'], sig: 'sg', receiver: 'Mr. Patil' }, true);
 eq(P.stage, 'installing', 'installing');
+refuse('u_tch', 'SOP_STEP', pid, { i: 0, photo: 'x' }, 'err_wait_permit');
+ok(A.tasksFor(S, 'u_tch').some(x => x.k === 'wait_permit' && x.info), 'tech sees it waits for the permit');
+refuse('u_adm', 'STAT_RECORD', pid, { kind: 'permit', no: 'EP', date: '2026-11-02', doc: 'd' }, 'err_stat_no');
+refuse('u_tch', 'STAT_RECORD', pid, { kind: 'permit', no: 'EP/77', date: '2026-11-02', doc: 'd' }, 'err_role_not_allowed');
+act('u_adm', 'STAT_RECORD', pid, { kind: 'permit', no: 'EP/PUN/2026/77', date: '2026-11-02', authority: 'Lift Inspector Pune', doc: 'perm' }, true);
 refuse('u_tch', 'SOP_STEP', pid, { i: 0, photo: 'x' }, 'err_safety_first');
 act('u_tch', 'SAFETY', pid, { photos: Object.fromEntries(A.SAFETY_ITEMS.map(([k]) => [k, 'sf'])) }, true);
 for (let i = 0; i < A.CABIN_STEP; i++) act('u_tch', 'SOP_STEP', pid, { i, photo: 's' + i, reading: A.SOP_READ[i] ? A.SOP_READ[i].min : undefined }, true);
@@ -154,6 +159,9 @@ act('u_cus', 'HAND_SIGN', pid, { slot: 'customer', sig: 'c', name: 'Mr. Patil' }
 refuse('u_cus', 'HAND_SIGN', pid, { slot: 'tech', sig: 'c', name: 'x' }, 'err_access');
 act('u_tch', 'HAND_SIGN', pid, { slot: 'tech', sig: 't', name: 'TECH' }, true);
 act('u_qc', 'HAND_SIGN', pid, { slot: 'qc', sig: 'q', name: 'QC' }, true);
+refuse('u_adm', 'HAND_COMPLETE', pid, {}, 'err_need_licence');
+refuse('u_adm', 'STAT_RECORD', pid, { kind: 'licence', no: 'LIC/9', date: '2026-11-03', expiry: '2026-11-01', doc: 'l' }, 'err_stat_expiry');
+act('u_adm', 'STAT_RECORD', pid, { kind: 'licence', no: 'LIC/PUN/2026/9', date: '2026-11-03', expiry: '2027-11-03', doc: 'lic' }, true);
 act('u_adm', 'HAND_COMPLETE', pid, {}, true);
 eq(P.stage, 'amc', 'amc');
 ok(A.amcDue(P).length === 4, 'four amc visits');
@@ -173,6 +181,15 @@ act('u_tch', 'TICKET_CLOSE', pid, { tid: P.amc.tickets[0].id, cause: 'door', not
   refuse('u_adm', 'QUOTE_APPROVE', p2, {}, 'err_owner_only');
   ok(!A.tasksFor(S, 'u_adm').some(x => x.pid === p2 && x.k === 'approve_quote'), 'admin has no owner-only approval task');
   ok(A.tasksFor(S, 'u_own').some(x => x.pid === p2 && x.k === 'approve_quote'), 'owner gets approval');
+  refuse('u_adm', 'STAT_RECORD', p2, { kind: 'licence', no: 'LIC-1', date: '2026-11-03', expiry: '2027-11-03', doc: 'd' }, 'err_stage');
+  refuse('u_sal', 'HOLD_START', p2, { reason: 'customer', note: 'x' }, 'err_role_not_allowed');
+  act('u_adm', 'HOLD_START', p2, { reason: 'customer', note: 'Customer travelling for 2 weeks' });
+  refuse('u_adm', 'HOLD_START', p2, { reason: 'weather', note: 'x' }, 'err_on_hold');
+  clock += 20 * 864e5; A.setNow(clock);
+  ok(A.needs(S, S.projects[p2]).every(k => !k.late), 'work on hold is never late');
+  A.setNow(null);
+  act('u_own', 'HOLD_END', p2, {});
+  refuse('u_own', 'HOLD_END', p2, {}, 'err_not_on_hold');
   act('u_sal', 'DEAL_LOST', p2, { reason: 'lr_price' });
   refuse('u_fld', 'MSG_POST', p2, { text: 'hi' }, 'err_access');
 }

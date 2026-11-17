@@ -31,7 +31,7 @@
     const head = `<section class="card stack">
       <div class="card-head" style="margin:0"><span class="avatar" aria-hidden="true">${U.stageEm(P.stage)}</span><div style="flex:1;min-width:0"><h2>${esc(P.lead.name)}</h2><div class="muted small">${esc(P.lead.building || '')}${P.lead.building && P.lead.area ? ' · ' : ''}${esc(P.lead.area || '')}</div></div></div>
       ${U.rail(P.stage)}
-      <div class="row-flex">${U.chip(U.stageName(P.stage), P.stage === 'amc' ? 'ok' : P.stage === 'lost' ? 'bad' : 'info')}${A.OPEN_STAGES.includes(P.stage) ? U.chip(t('since_days', { n: Math.max(0, A.daysBetween(P.since, A.nowISO())) })) : ''}${P.blockers.some(b => b.open) ? U.chip('⚠️ ' + t('has_problem'), 'bad') : ''}</div>
+      <div class="row-flex">${U.chip(U.stageName(P.stage), P.stage === 'amc' ? 'ok' : P.stage === 'lost' ? 'bad' : 'info')}${A.OPEN_STAGES.includes(P.stage) ? U.chip(t('since_days', { n: Math.max(0, A.daysBetween(P.since, A.nowISO())) })) : ''}${P.blockers.some(b => b.open) ? U.chip('⚠️ ' + t('has_problem'), 'bad') : ''}${A.onHold(P) ? U.chip('⏸️ ' + t('on_hold'), 'warn') : ''}</div>
       <div class="grid2 no-print">
         ${canCall ? `<a class="btn sm" href="tel:${esc(P.lead.phone)}">📞 ${esc(t('call'))}</a>` : ''}
         ${directions ? `<a class="btn sm" href="${esc(directions)}" target="_blank" rel="noopener">🧭 ${esc(t('directions'))}</a>` : ''}
@@ -44,7 +44,8 @@
     else if (P.stage === 'amc') next = U.banner('🔑', `<b>${esc(t('next_amc'))}</b>${esc(t('lift_code'))}: <span class="mono">${esc(P.done.liftCode)}</span>`, 'ok');
     else if (w) next = U.banner('⏳', `<b>${esc(t('waiting_for', { who: A.whoFor(S, P, w.task) }))}</b>${esc(U.taskTitle(w.task))}${w.task.late ? ' · ' + esc(t('late_days', { n: w.task.lateDays })) : ''}`, w.task.late ? 'warn' : '');
     else next = U.banner('✓', esc(t('next_none')));
-    const body = `<div class="stack-l">${head}${next}
+    const hold = A.onHold(P) ? (h => U.banner('⏸️', `<b>${esc(t('on_hold_since', { d: U.fmtD(h.from) }))}</b>${esc(t('hr_' + h.reason))} — ${esc(h.note)}`, 'warn'))(P.holds[P.holds.length - 1]) : '';
+    const body = `<div class="stack-l">${head}${hold}${next}
       <div class="tabs no-print" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${k === tab}" data-a="tab" data-v="${k}">${esc(l)}</button>`).join('')}</div>
       <div role="tabpanel">${TABS[tab](P, S, u)}</div></div>`;
     return { title: P.id, sub: U.stageName(P.stage), back: u.role === 'customer' ? '/home' : '/jobs', body,
@@ -74,6 +75,10 @@
         [t('addons'), esc(['ard', 'curtain', 'premium'].filter(k => r[k]).map(k => t('add_' + k)).join(', ') || '—')], [t('q_use'), esc(t('use_' + r.use))], [t('q_timeline'), esc(t('tl_' + r.timeline))]
       ])}</div>`);
       out.push(`<div class="card stack"><h3>👥 ${esc(t('team'))}</h3>${kv([[t('r_sales'), person(P.sales)], [t('r_qc'), person(P.qc)], [t('r_tech'), person(P.tech)], [t('r_supplier'), person(P.supplier)], [t('r_customer'), P.customer ? person(P.customer) + ' ' + U.chip(t('has_login'), 'ok') : `<span class="muted">${esc(t('no_login'))}</span>`]])}</div>`);
+      if (A.stageIdx(P.stage) >= A.stageIdx('site_ok') && P.stage !== 'lost') {
+        const st = P.statutory || {}, row = k => { const x = st[k]; return [t('stat_title_' + k), x ? `✅ <span class="mono">${esc(x.no)}</span>${x.expiry ? ' · ' + esc(t('valid_till', { d: U.fmtD(x.expiry) })) : ''}${x.doc ? ` <button type="button" class="link-btn" data-a="viewPhoto" data-v="${esc(x.doc)}">📄</button>` : ''}` : `<span class="muted">${esc(t('not_yet'))}</span>`]; };
+        out.push(`<div class="card stack"><h3>⚖️ ${esc(t('stat_papers'))}</h3>${kv([row('permit'), row('licence')])}</div>`);
+      }
       if (P.stage === 'installing' || P.sop.length) {
         const n = A.sopNext(P);
         out.push(`<div class="card stack"><div class="card-head"><h3>🔧 ${esc(t('install_progress'))}</h3><span class="chip info">${n}/${A.SOP.length}</span></div><div class="steps-dots" aria-hidden="true">${A.SOP.map((s, i) => `<i class="${P.sop[i] ? 'done' : i === n ? 'on' : ''}"></i>`).join('')}</div>
@@ -159,6 +164,9 @@
     if (A.can(S, uid, 'REASSIGN', pid) && A.OPEN_STAGES.concat(['amc']).includes(P.stage)) items.push({ v: 'reassign', em: '🔁', label: t('reassign') });
     if (A.lastQuote(P) && A.seesMoney(u.role)) items.push({ v: 'quote', em: '🖨️', label: t('view_quote') });
     if (P.agreement && P.agreement.signed && A.seesMoney(u.role)) items.push({ v: 'agreement', em: '📄', label: t('view_agreement') });
+    if (A.can(S, uid, 'STAT_RECORD', pid)) items.push({ v: 'stat', em: '⚖️', label: t('stat_papers'), sub: t('stat_papers_d') });
+    if (A.can(S, uid, 'HOLD_START', pid)) items.push({ v: 'hold', em: '⏸️', label: t('put_on_hold'), sub: t('put_on_hold_d') });
+    if (A.can(S, uid, 'HOLD_END', pid)) items.push({ v: 'resume', em: '▶️', label: t('resume_work') });
     if (A.can(S, uid, 'DEAL_LOST', pid)) items.push({ v: 'lost', em: '❌', label: t('mark_lost') });
     if (A.can(S, uid, 'LEAD_REOPEN', pid)) items.push({ v: 'reopen', em: '♻️', label: t('reopen') });
     items.push({ v: 'chat', em: '💬', label: t('chat') });
@@ -173,6 +181,13 @@
     if (v === 'lost') return markLost(pid);
     if (v === 'reopen') return dispatch('LEAD_REOPEN', pid, {}, t('done_title'));
     if (v === 'reassign') return reassign(pid);
+    if (v === 'stat') return U.go('/flow/STAT_RECORD/' + pid);
+    if (v === 'resume') return dispatch('HOLD_END', pid, {}, t('work_resumed'));
+    if (v === 'hold') {
+      const out = await U.formSheet(t('put_on_hold'), U.field(t('reason'), `<select data-x="reason">${A.HOLD_REASONS.map(([k, em]) => `<option value="${k}">${em} ${esc(t('hr_' + k))}</option>`).join('')}</select>`, { req: true }) + U.field(t('note'), '<textarea data-x="note" maxlength="500"></textarea>', { req: true, hint: t('hold_note_hint') }), t('put_on_hold'),
+        el2 => { const note = el2.querySelector('[data-x=note]').value.trim(); return note ? { reason: el2.querySelector('[data-x=reason]').value, note } : { err: 'err_note' }; });
+      if (out) await dispatch('HOLD_START', pid, out, t('held_ok'));
+    }
   };
   async function markLost(pid) {
     const out = await U.formSheet(t('mark_lost'), U.field(t('reason'), `<select data-x="reason">${A.LOST_REASONS.map(k => `<option value="${k}">${esc(t(k))}</option>`).join('')}</select>`, { req: true }) + U.field(t('note'), '<textarea data-x="note" maxlength="500"></textarea>'), t('mark_lost'),
@@ -362,7 +377,7 @@
         <button class="btn block dark" type="button" data-a="logout">🚪 ${esc(t('logout'))}</button>
         ${A.Store.mode === 'practice' ? `<button class="btn block" type="button" data-a="exitPractice">🎓 ${esc(t('exit_practice'))}</button>` : ''}
       </div>
-      <p class="muted tiny center">AIEC Elevator OS · ${esc(t('version'))} 2.0 · ${esc(t('autosaved'))}</p>
+      <p class="muted tiny center">AIEC Elevator OS · ${esc(t('version'))} 2.1 · ${esc(t('autosaved'))}</p>
     </div>`;
     return { title: t('me'), body };
   };
