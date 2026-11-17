@@ -1,11 +1,11 @@
 {
   "name": "aiec-elevator-os",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "description": "AIEC Elevator OS \u2014 offline, three-language lead-to-handover work manager for lift companies.",
   "scripts": {
     "start": "python3 -m http.server 8765",
-    "test": "node tests/domain.test.js",
+    "test": "for f in js/*.js sw.js tests/*.js; do node --check $f || exit 1; done && node tests/domain.test.js",
     "test:e2e": "node tests/e2e.js http://localhost:8765/ && node tests/setup.e2e.js http://localhost:8765/ && node tests/offline.e2e.js http://localhost:8765/ && node tests/a11y.e2e.js http://localhost:8765/"
   },
   "license": "UNLICENSED",

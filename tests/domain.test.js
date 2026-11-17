@@ -113,6 +113,15 @@ act('u_adm', 'RELEASE', pid, { tech: 'u_tch', supplier: 'u_sup', drawing: 'DWG-1
 refuse('u_sup', 'DISPATCH', pid, { vehicle: 'MH12', photos: ['d'] }, 'err_accept_po_first');
 act('u_sup', 'PO_ACCEPT', pid, { date: '2026-11-10' }, true);
 act('u_sup', 'DISPATCH', pid, { vehicle: 'MH12AB1234', photos: ['d1'] }, true);
+refuse('u_sup', 'BILL_SUBMIT', pid, { no: 'KV-77', amount: 0, doc: 'b' }, 'err_bill_amount');
+act('u_sup', 'BILL_SUBMIT', pid, { no: 'KV-77', amount: 420000, doc: 'bill' }, true);
+refuse('u_sup', 'BILL_SUBMIT', pid, { no: 'KV-78', amount: 1000, doc: 'b' }, 'err_bill_exists');
+refuse('u_sup', 'BILL_DECIDE', pid, { bid: P.bills[0].id, ok: true }, 'err_role_not_allowed');
+refuse('u_adm', 'BILL_DECIDE', pid, { bid: P.bills[0].id, ok: true, deduction: 5000 }, 'err_note');
+act('u_adm', 'BILL_DECIDE', pid, { bid: P.bills[0].id, ok: true, deduction: 5000, note: 'One landing door scratched' }, true);
+eq(P.bills[0].payable, 415000, 'bill payable after deduction');
+ok(!A.tasksFor(S, 'u_fin').some(x => x.k === 'pay_bill'), 'no bill to pay before the customer material money');
+refuse('u_fin', 'BILL_PAY', pid, { bid: P.bills[0].id, ref: 'NEFT0001' }, 'err_bill_wait_customer');
 act('u_tch', 'ARRIVAL', pid, { photos: ['a1'], sealOk: true }, true);
 refuse('u_tch', 'MHAND', pid, {}, 'err_wait_payment');
 ok(A.tasksFor(S, 'u_tch').some(x => x.k === 'wait_payment'), 'tech sees waiting info');
@@ -120,6 +129,8 @@ act('u_sal', 'PAY_RECORD', pid, { purpose: 'arrival', amount: P.schedule.arrival
 act('u_fin', 'PAY_VERIFY', pid, { payId: P.payments[1].id, ok: false, note: 'Not in bank' }, true);
 act('u_sal', 'PAY_RECORD', pid, { purpose: 'arrival', amount: P.schedule.arrival, mode: 'bank', ref: 'NEFT998878' }, true);
 act('u_fin', 'PAY_VERIFY', pid, { payId: P.payments[2].id, ok: true }, true);
+act('u_fin', 'BILL_PAY', pid, { bid: P.bills[0].id, ref: 'NEFT0001' }, true);
+eq(A.billsOut(P), 415000, 'money out to the supplier');
 const all = Object.fromEntries(P.po.items.map(m => [m.k, true]));
 act('u_tch', 'MHAND', pid, { checked: all, photos: ['m1'], sig: 'sg', receiver: 'Mr. Patil' }, true);
 eq(P.stage, 'installing', 'installing');
@@ -191,6 +202,20 @@ act('u_tch', 'TICKET_CLOSE', pid, { tid: P.amc.tickets[0].id, cause: 'door', not
   eq(A.payWeek(S, 'u_tch', wk).paid.ref, 'NEFT556677', 'week marked paid');
   act('u_own', 'CONFIG_SET', '', { key: 'paySopStep', value: 2000 });
   eq(A.payWeek(S, 'u_tch', wk).total, 12 * A.DEFAULT_CONFIG.paySopStep, 'a rate change does not change past work');
+}
+
+/* ---- bank statement matching (suggestions only) ---- */
+{
+  const fake = { projects: { X: { id: 'X', payments: [
+    { id: 'a', status: 'pending', amount: 10000, ref: 'UTR4455661' },
+    { id: 'b', status: 'pending', amount: 250000, ref: 'NEFT-1' },
+    { id: 'c', status: 'pending', amount: 999, ref: 'ZZZZ' },
+    { id: 'd', status: 'confirmed', amount: 10000, ref: 'UTR4455661' } ] } } };
+  const text = '17/11/2026, UPI/UTR4455661/AIEC PAYMENT, 10,000.00 Cr\n16/11/2026\tNEFT IN SHAH\t2,50,000.00\n15/11/2026; RENT; 45000\n14/11/2026, UPI/OTHER, 10000';
+  eq(A.parseBank(text).map(l => l.amount), [10000, 250000, 45000, 10000], 'bank lines parsed (Indian commas, Cr)');
+  const m = A.bankMatch(fake, text);
+  eq(m.matches.map(x => x.payId + (x.sure ? '!' : '?')), ['a!', 'b?'], 'sure match by reference, likely match by unique amount');
+  eq(m.unmatched.length, 2, 'unmatched lines listed');
 }
 
 /* ---- separation of duties ---- */

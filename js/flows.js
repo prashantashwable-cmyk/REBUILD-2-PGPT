@@ -267,7 +267,7 @@
     type: 'LEAD_ACCEPT', title: () => t('tk_review_lead'),
     steps: (P, c, S) => [{ render: () => {
       const heat = A.leadHeat(P);
-      return `${leadCard(P)}<div class="card stack"><h2 class="h3">📷 ${esc(t('photos'))}</h2><div class="photos">${P.lead.photos.map(id => `<button type="button" class="photo-slot filled" data-a="viewPhoto" data-v="${esc(id)}">${U.imgTag(id)}</button>`).join('')}</div></div>
+      return `${leadCard(P)}<div class="card stack"><h2 class="h3">📷 ${esc(t('photos'))}</h2><div class="photos">${P.lead.photos.map(id => `<button type="button" class="photo-slot filled" data-a="viewPhoto" data-v="${esc(id)}" aria-label="${esc(t('open_photo'))}">${U.imgTag(id)}</button>`).join('')}</div></div>
         <div class="card stack"><div class="card-head"><h2 class="h3">🎯 ${esc(t('lead_score'))}</h2><span class="chip ${heat.n >= 50 ? 'ok' : heat.n >= 30 ? 'info' : ''}">${heat.n}/100</span></div><p class="small muted">${esc(heat.why.map(([n, k]) => '+' + n + ' ' + t(k)).join(' · ') || '—')}</p>
         ${kv([[t('phone'), `<a href="tel:${esc(P.lead.phone)}">${esc(P.lead.phone)}</a>`], [t('contact_role'), esc(t('cr_' + P.lead.contactRole))], [t('address'), esc(P.lead.address)], [t('floors'), P.lead.floors], [t('shaft_ready'), esc(t('sh_' + P.lead.shaft))], [t('location'), P.lead.gps ? `<a href="${esc(U.mapsLink(P.lead.gps))}" target="_blank" rel="noopener">${esc(t('open_map'))}</a>` : '—'], [t('notes'), esc(P.lead.notes)], [t('added_by'), esc(U.userName(P.createdBy))]])}</div>
         <p class="muted small">${esc(t('review_rule'))}</p>`;
@@ -459,7 +459,7 @@
     type: 'PAY_VERIFY', title: () => t('tk_verify_payment'),
     init: (P, S, u, q) => ({ payId: q.pay || ((P.payments.find(p => p.status === 'pending') || {}).id) }),
     steps: (P, c, S) => [{ render: () => { const p = P.payments.find(x => x.id === c.payId); if (!p || p.status !== 'pending') return U.banner('ℹ️', esc(t('err_payment'))); return `${leadCard(P)}<div class="card stack center"><span class="muted">${esc(t('pay_' + p.purpose))}</span><div style="font-size:2rem;font-weight:800" class="num">${U.money(p.amount)}</div></div>
-      <div class="card stack">${kv([[t('pay_mode'), esc(t('pm_' + p.mode))], [t('reference'), `<span class="mono">${esc(p.ref)}</span>`], [t('recorded_by_lab'), esc(U.userName(p.recordedBy))], [t('when'), esc(U.fmtDT(p.t))]])}${p.proof ? `<div class="photos"><button type="button" class="photo-slot filled" data-a="viewPhoto" data-v="${esc(p.proof)}">${U.imgTag(p.proof)}</button></div>` : ''}</div>
+      <div class="card stack">${kv([[t('pay_mode'), esc(t('pm_' + p.mode))], [t('reference'), `<span class="mono">${esc(p.ref)}</span>`], [t('recorded_by_lab'), esc(U.userName(p.recordedBy))], [t('when'), esc(U.fmtDT(p.t))]])}${p.proof ? `<div class="photos"><button type="button" class="photo-slot filled" data-a="viewPhoto" data-v="${esc(p.proof)}" aria-label="${esc(t('open_photo'))}">${U.imgTag(p.proof)}</button></div>` : ''}</div>
       <p class="small muted">🏦 ${esc(t('verify_rule'))}</p>`; }, bar: decideBar('fail', '✗ ' + t('not_in_bank'), t('found_in_bank')) }],
     actions: {
       fail: async (el, f) => {
@@ -719,6 +719,44 @@
     what: (P, c) => t('what_stat_' + c.kind)
   };
 
+  /* ---------- supplier bills ---------- */
+  const billCard = (P, b) => `<div class="card stack"><div class="row-flex"><b style="flex:1">🧾 ${esc(t('bill_no'))} <span class="mono">${esc(b.no)}</span></b><b class="num" style="font-size:1.3rem">${U.money(b.amount)}</b></div>
+    ${b.decided && b.decided.deduction ? `<div class="row-flex small"><span>${esc(t('deduction'))}: − ${U.money(b.decided.deduction)} (${esc(b.decided.note)})</span><span class="spacer"></span><b>${esc(t('to_pay'))}: ${U.money(b.payable)}</b></div>` : ''}
+    <p class="small muted">${esc(U.userName(b.by))} · ${esc(U.fmtDT(b.t))}${b.note ? ' · ' + esc(b.note) : ''}</p>${b.doc ? `<div class="photos"><button type="button" class="photo-slot filled" data-a="viewPhoto" data-v="${esc(b.doc)}" aria-label="${esc(t('open_photo'))}">${U.imgTag(b.doc)}</button></div>` : ''}</div>`;
+  A.billCard = billCard;
+  FLOWS.BILL_SUBMIT = {
+    type: 'BILL_SUBMIT', title: () => t('tk_send_bill'),
+    init: () => ({ no: '', amount: '', doc: '', note: '' }),
+    steps: (P, c) => [{ render: () => `<div class="card stack"><h2 class="h3">📑 ${esc(P.po ? P.po.no : '')}</h2><p class="small muted">${esc(t('bill_intro'))}</p></div>
+      <div class="card stack">${U.input('no', c.no, { label: t('bill_no'), req: true })}${U.input('amount', c.amount, { label: t('bill_amount'), type: 'number', inputmode: 'numeric', min: 1, pre: '₹', req: true })}<div class="photos">${U.photoSlot('doc', c.doc, t('bill_photo') + ' *', '🧾')}</div>${U.input('note', c.note, { label: t('note') + ' (' + t('optional') + ')', textarea: true })}</div>`,
+      check: () => (A.str(c.no).length < 2 ? 'err_bill_no' : !(+c.amount > 0) ? 'err_bill_amount' : !c.doc ? 'err_photo' : null) }],
+    submitLabel: () => t('send'), submit: (P, c) => one('BILL_SUBMIT', { no: c.no, amount: +c.amount, doc: c.doc, note: c.note }), what: () => t('what_bill_sent')
+  };
+  FLOWS.BILL_DECIDE = {
+    type: 'BILL_DECIDE', title: () => t('tk_approve_bill'),
+    guard: null,
+    init: (P, S, u, q) => ({ bid: q.bid || ((P.bills.find(b => b.status === 'submitted') || {}).id), deduction: '', note: '' }),
+    steps: (P, c) => [{ render: () => { const b = P.bills.find(x => x.id === c.bid); if (!b || b.status !== 'submitted') return U.banner('ℹ️', esc(t('err_item'))); return `${leadCard(P)}${billCard(P, b)}
+      <div class="card stack">${U.input('deduction', c.deduction, { label: t('deduction') + ' (' + t('optional') + ')', type: 'number', inputmode: 'numeric', min: 0, pre: '₹', hint: t('deduction_hint') })}${U.input('note', c.note, { label: t('note'), textarea: true })}</div>`; },
+      check: () => (+c.deduction > 0 && !A.str(c.note) ? 'err_note' : null), bar: decideBar('reject', '✗ ' + t('reject'), t('approve')) }],
+    actions: {
+      reject: async (el, f) => {
+        if (!A.str(f.ctx.note)) { f.err = 'err_note'; A.App.render(); return; }
+        f.def = Object.assign({}, f.def, { what: () => t('what_bill_rejected') });
+        await submit(one('BILL_DECIDE', { bid: f.ctx.bid, ok: false, note: f.ctx.note }));
+      }
+    },
+    submit: (P, c) => one('BILL_DECIDE', { bid: c.bid, ok: true, deduction: +c.deduction || 0, note: c.note }), what: () => t('what_bill_approved')
+  };
+  FLOWS.BILL_PAY = {
+    type: 'BILL_PAY', title: () => t('tk_pay_bill'),
+    guard: null,
+    init: (P, S, u, q) => ({ bid: q.bid || ((P.bills.find(b => b.status === 'approved') || {}).id), ref: '' }),
+    steps: (P, c) => [{ render: () => { const b = P.bills.find(x => x.id === c.bid); if (!b || b.status !== 'approved') return U.banner('ℹ️', esc(t('err_item'))); return `${billCard(P, b)}${A.custCleared(P) ? U.banner('✅', esc(t('cust_money_in')), 'ok') : U.banner('⏳', esc(t('err_bill_wait_customer')), 'warn')}<div class="card stack">${U.input('ref', c.ref, { label: t('utr_no'), req: true, hint: t('ref_hint') })}</div>`; },
+      check: () => (A.str(c.ref).length < 4 ? 'err_ref' : null) }],
+    submitLabel: () => t('mark_paid'), submit: (P, c) => one('BILL_PAY', { bid: c.bid, ref: c.ref }), what: () => t('what_bill_paid')
+  };
+
   /* ---------- work pay: approve a finished week, then pay it ---------- */
   const payItems = w => `<div class="card stack"><div class="row-flex"><span class="avatar s" aria-hidden="true">${A.ROLE_ICON[(A.Store.S.users[w.uid] || {}).role] || '👤'}</span><div style="flex:1"><b>${esc(U.userName(w.uid))}</b><div class="small muted">${esc(t('week_of', { d: U.fmtD(w.week) }))}</div></div><b class="num" style="font-size:1.3rem">${U.money(w.approved ? w.approved.amount : w.total)}</b></div>
     <table class="money">${w.items.map(x => `<tr><td>${esc(t('earn_' + x.kind, { n: x.n }))}<br><span class="small muted">${esc(x.pid)} · ${esc(U.fmtD(x.t))}</span></td><td>${U.money(x.amount)}</td></tr>`).join('')}</table></div>`;
@@ -750,6 +788,8 @@
 
   /* a guard for flows without one action type of their own */
   FLOWS.PREP.guard = (S, u, P) => (P.stage !== 'site_prep' ? 'err_stage' : A.prepDone(P) ? A.guard(S, u.uid, 'QC_REQUEST', P.id) : A.guard(S, u.uid, 'PREP_TICK', P.id));
+  FLOWS.BILL_DECIDE.guard = (S, u, P) => (A.actsAs(S, u, A.OFFICE) ? null : 'err_role_not_allowed');
+  FLOWS.BILL_PAY.guard = (S, u, P) => (A.actsAs(S, u, ['finance', 'owner']) ? null : 'err_role_not_allowed');
   FLOWS.TICKET_CLOSE.guard = (S, u, P) => (P.stage !== 'amc' ? 'err_stage' : A.actsAs(S, u, ['tech', 'qc', 'admin', 'owner']) ? null : 'err_role_not_allowed');
   FLOWS.BLOCKER_RESOLVE.guard = (S, u, P) => (A.actsAs(S, u, ['admin', 'owner', 'sales', 'supplier']) ? null : 'err_role_not_allowed');
 })(window.AIEC);

@@ -118,6 +118,7 @@
      an erection permit before installation starts, a lift licence before the lift is handed over */
   const STAT_KINDS = ['permit', 'licence'];
   const STAT_STAGES = { permit: ['site_prep', 'qc_site', 'site_fix', 'site_ok', 'material_order', 'dispatched', 'arrived', 'installing'], licence: ['installing', 'qc_final', 'install_fix', 'final_pay', 'handover', 'amc'] };
+  const BILL_STAGES = ['dispatched', 'arrived', 'installing', 'qc_final', 'install_fix', 'final_pay', 'handover', 'amc'];
   const HOLD_REASONS = [['customer', '🏠'], ['supplier', '🏭'], ['weather', '🌧️'], ['payment', '💰'], ['other', '❔']];
   const BLOCK_REASONS = [['material', '📦', 'supplier'], ['site', '🏗️', 'sales'], ['power', '⚡', 'sales'], ['help', '🙋', 'admin'], ['safety', '⚠️', 'admin']];
   const AMC_CHECKS = ['ride', 'doors', 'alarm', 'brake', 'ropes', 'oil', 'pit'];
@@ -251,7 +252,7 @@
     id, t: ev.t, createdBy: ev.by, stage: 'new', since: ev.t, lead: {}, sales: '', qc: '', tech: '', supplier: '', customer: '',
     req: null, quotes: [], agreement: null, schedule: null, payments: [], prep: {}, qcSite: [], corrections: [], po: null,
     dispatch: null, arrival: null, mhand: null, sop: [], safety: {}, qcFinal: [], hand: {}, done: null,
-    amc: { visits: [], tickets: [] }, blockers: [], statutory: {}, holds: [], chat: [], history: [], followUp: null, returnReason: '', lostReason: ''
+    amc: { visits: [], tickets: [] }, blockers: [], statutory: {}, holds: [], bills: [], chat: [], history: [], followUp: null, returnReason: '', lostReason: ''
   });
   const activeUsers = (S, role) => Object.values(S.users).filter(u => u.active && (!role || u.role === role));
   const firstActive = (S, role) => { const a = activeUsers(S, role).sort((x, y) => x.name.localeCompare(y.name)); return a.length ? a[0].uid : ''; };
@@ -743,6 +744,38 @@
       apply: (S, ev, P) => { const h = P.holds[P.holds.length - 1]; h.to = ev.t; h.endBy = ev.by; }
     },
 
+    /* ----- supplier bills: the supplier sends, the office approves (with any deduction), Finance pays once the customer's material money is in the bank ----- */
+    BILL_SUBMIT: {
+      roles: ['supplier'], stages: BILL_STAGES, who: 'supplier',
+      guard: (S, u, P) => (P.bills.some(b => b.status !== 'rejected') ? 'err_bill_exists' : null),
+      check: (S, d) => (str(d.no).length < 2 ? 'err_bill_no' : !(+d.amount > 0 && +d.amount <= 1e8) ? 'err_bill_amount' : !d.doc ? 'err_photo' : null),
+      apply: (S, ev, P) => { P.bills.push({ id: ev.id, no: str(ev.d.no), amount: Math.round(+ev.d.amount), doc: ev.d.doc, note: str(ev.d.note), status: 'submitted', t: ev.t, by: ev.by }); }
+    },
+    BILL_DECIDE: {
+      roles: OFFICE,
+      check: (S, d, P) => {
+        const b = P.bills.find(x => x.id === d.bid);
+        if (!b || b.status !== 'submitted') return 'err_item';
+        if (d.ok) { const ded = +d.deduction || 0; if (ded < 0 || ded >= b.amount) return 'err_deduction'; if (ded > 0 && !str(d.note)) return 'err_note'; return null; }
+        return !str(d.note) ? 'err_note' : null;
+      },
+      apply: (S, ev, P) => {
+        const b = P.bills.find(x => x.id === ev.d.bid);
+        b.status = ev.d.ok ? 'approved' : 'rejected'; b.decided = { t: ev.t, by: ev.by, note: str(ev.d.note), deduction: ev.d.ok ? Math.round(+ev.d.deduction || 0) : 0 };
+        if (ev.d.ok) b.payable = b.amount - b.decided.deduction;
+      }
+    },
+    BILL_PAY: {
+      roles: ['finance', 'owner'],
+      check: (S, d, P) => {
+        const b = P.bills.find(x => x.id === d.bid);
+        if (!b || b.status !== 'approved') return 'err_item';
+        if (!custCleared(P)) return 'err_bill_wait_customer';
+        return str(d.ref).length < 4 ? 'err_ref' : null;
+      },
+      apply: (S, ev, P) => { const b = P.bills.find(x => x.id === ev.d.bid); b.status = 'paid'; b.paid = { t: ev.t, by: ev.by, ref: str(ev.d.ref) }; }
+    },
+
     /* ----- work pay: the office approves a finished week, Finance pays it ----- */
     PAY_WEEK_APPROVE: {
       roles: OFFICE, noProject: true,
@@ -804,6 +837,9 @@
     return null;
   }
 
+  /* the customer's money for the material is in the bank */
+  const custCleared = P => payConfirmed(P, 'arrival');
+  const billsOut = P => sum((P.bills || []).filter(b => b.status === 'paid').map(b => b.payable));
   const onHold = P => !!P.holds && P.holds.some(h => !h.to);
   const licenceOk = (P, at) => { const l = (P.statutory || {}).licence; return !!l && l.expiry > dayOf(at || nowISO()); };
 
@@ -959,6 +995,11 @@
         break;
       }
     }
+    if (BILL_STAGES.includes(P.stage) && P.supplier && !P.bills.some(b => b.status !== 'rejected')) add('send_bill', ['supplier'], { field: 'supplier', type: 'BILL_SUBMIT' });
+    for (const b of P.bills) {
+      if (b.status === 'submitted') add('approve_bill', ['admin', 'owner'], { type: 'BILL_DECIDE', bid: b.id, since: b.t, amount: b.amount });
+      if (b.status === 'approved') { if (custCleared(P)) add('pay_bill', ['finance', 'owner'], { type: 'BILL_PAY', bid: b.id, since: b.decided.t, amount: b.payable }); }
+    }
     if (+c.permitGate && !P.statutory.permit && STAT_STAGES.permit.includes(P.stage) && stageIdx(P.stage) >= stageIdx('site_ok')) add('record_permit', ['admin', 'owner'], { type: 'STAT_RECORD', kind: 'permit', urgent: P.stage === 'installing' || P.stage === 'arrived' });
     if (+c.licenceGate && !licenceOk(P) && ['final_pay', 'handover'].includes(P.stage)) add('record_licence', ['admin', 'owner'], { type: 'STAT_RECORD', kind: 'licence', urgent: P.stage === 'handover' });
     if (P.stage === 'amc' && P.statutory.licence && P.statutory.licence.expiry <= addDays(60)) add('renew_licence', ['admin', 'owner'], { type: 'STAT_RECORD', kind: 'licence', due: P.statutory.licence.expiry, urgent: P.statutory.licence.expiry <= addDays(7) });
@@ -1016,6 +1057,28 @@
   }
 
   /* ---------- numbers for the office dashboard ---------- */
+  /* ---------- bank statement: suggestions only; a person confirms each match ---------- */
+  /* lines like "17/11/2026, UPI/UTR4455661/AIEC, 10000" or tab/semicolon separated; the last money-like number is the amount */
+  function parseBank(text) {
+    return String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map((line, i) => {
+      const nums = [...line.replace(/(\d),(?=\d)/g, '$1').matchAll(/(?:^|[\s,;\t₹])(\d{1,9}(?:\.\d{1,2})?)(?=$|[\s,;\tCcDdRr])/g)].map(m => +m[1]);
+      const amount = nums.filter(n => n >= 1).pop();
+      return { i, line, amount: amount || 0, text: line.toUpperCase().replace(/[^A-Z0-9]/g, '') };
+    }).filter(x => x.amount > 0);
+  }
+  function bankMatch(S, text) {
+    const lines = parseBank(text), used = new Set(), out = [];
+    const pend = Object.values(S.projects).flatMap(P => P.payments.filter(p => p.status === 'pending').map(p => ({ P, p })));
+    for (const { P, p } of pend) {
+      const ref = p.ref.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const cands = lines.filter(l => !used.has(l.i) && Math.round(l.amount) === Math.round(p.amount));
+      const strong = cands.find(l => ref.length >= 4 && l.text.includes(ref));
+      const pick = strong || (cands.length === 1 ? cands[0] : null);
+      if (pick) { used.add(pick.i); out.push({ pid: P.id, payId: p.id, amount: p.amount, ref: p.ref, line: pick.line, sure: !!strong }); }
+    }
+    return { lines: lines.length, matches: out, unmatched: lines.filter(l => !used.has(l.i)).map(l => l.line) };
+  }
+
   function dashboard(S) {
     const Ps = Object.values(S.projects);
     const open = Ps.filter(P => OPEN_STAGES.includes(P.stage));
@@ -1029,7 +1092,8 @@
     const decided = Ps.filter(P => P.stage === 'lost' || P.wonAt);
     const winRate = decided.length ? Math.round(Ps.filter(P => P.wonAt).length / decided.length * 100) : 0;
     const tickets = Ps.flatMap(P => P.amc.tickets.filter(x => !x.closed));
-    return { open: open.length, wonCount: won.length, wonValue: sum(won.map(P => P.agreement ? P.agreement.total : (lastQuote(P) || { calc: { total: 0 } }).calc.total)), pipeline, received, pending, byPhase, leads, winRate, amc: Ps.filter(P => P.stage === 'amc').length, tickets: tickets.length, stuck: stuckWork(S).length };
+    const billsDue = sum(Ps.flatMap(P => P.bills.filter(b => b.status === 'approved' || b.status === 'submitted').map(b => b.payable || b.amount)));
+    return { billsDue, open: open.length, wonCount: won.length, wonValue: sum(won.map(P => P.agreement ? P.agreement.total : (lastQuote(P) || { calc: { total: 0 } }).calc.total)), pipeline, received, pending, byPhase, leads, winRate, amc: Ps.filter(P => P.stage === 'amc').length, tickets: tickets.length, stuck: stuckWork(S).length };
   }
 
   root.AIEC = Object.assign(root.AIEC || {}, {
@@ -1039,7 +1103,7 @@
     CONTACT_ROLES, SHAFT, LOST_REASONS, RETURN_REASONS, CALL_OUTCOMES, PREP_ITEMS, QC_SITE_CHECKS, QC_SITE_MEAS, QC_FINAL_CHECKS,
     SOP, CABIN_STEP, SOP_READ, SAFETY_ITEMS, BLOCK_REASONS, AMC_CHECKS, TICKET_KINDS, SEVERITIES, ROOT_CAUSES, PAY_MODES,
     LIFT_TYPES, CAPACITIES, FINISHES, JOB_KINDS, USES, TIMELINES, PURPOSES, PAY_STAGE,
-    STAT_KINDS, STAT_STAGES, HOLD_REASONS, onHold, licenceOk, weekOf, earnings, payWeek, payWeeks, companyTasks,
+    STAT_KINDS, STAT_STAGES, HOLD_REASONS, onHold, licenceOk, weekOf, earnings, payWeek, payWeeks, companyTasks, BILL_STAGES, custCleared, billsOut, parseBank, bankMatch,
     DEFAULT_CONFIG, CFG_LIMITS, TEXT_CFG, RULE_GROUPS,
     calcQuote, paySchedule, materialList, lastQuote, quoteValidTill, quoteExpired, activePay, payConfirmed, paidTotal, dueOf, payOpen,
     sopNext, prepDone, openCorr, safetyToday, leadHeat, warrantyEnd, amcDue, nextAmc,

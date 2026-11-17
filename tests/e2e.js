@@ -123,7 +123,20 @@ const log = m => console.log('  ' + m);
   await login(tech); await p.evaluate(h => { location.hash = '#/flow/MHAND/' + h; }, pid); await wait(300);
   await shot('mhand-blocked');
   if (!(await p.$('.empty'))) { fails++; console.error('✗ handover not blocked before payment'); } else log('✓ material handover waits for the payment');
-  await pay('arrival', 'NEFT7788990');
+  /* supplier bills; the office approves with a deduction */
+  await task('u_sup', 'send_bill'); await fill('no', 'KLS/26/901'); await fill('amount', '410000'); await photo('doc'); await shot('bill-send'); await next(); await done('supplier sends the bill');
+  await task('u_admin', 'approve_bill'); await fill('deduction', '3000'); await fill('note', 'Two landing door frames bent'); await shot('bill-approve'); await next(); await done('office approves the bill with a deduction');
+  if (await S(h => AIEC.tasksFor(AIEC.Store.S, 'u_fin').some(t => t.k === 'pay_bill' && t.pid === h), pid)) { fails++; console.error('✗ bill payable before customer money'); } else log('✓ supplier bill waits for the customer material money');
+  /* the customer's arrival payment is confirmed from the bank statement */
+  await task('u_sales', 'record_payment'); await fill('ref', 'NEFT7788990'); await next(); await done('payment recorded: arrival');
+  await login('u_fin'); await S(() => { location.hash = '#/bank'; AIEC.App.render(); }); await wait(300);
+  const amt = await S(h => AIEC.activePay(AIEC.Store.S.projects[h], 'arrival').amount, pid);
+  await p.fill('#bank-text', `17/11/2026, NEFT IN/NEFT7788990/KULKARNI, ${amt.toLocaleString('en-IN')}.00 Cr\n17/11/2026, ATM WDL, 5,000.00`);
+  await click('[data-a=bankRun]'); await shot('bank-match');
+  const sure = await p.$('[data-a=bankConfirm]');
+  if (!sure) { fails++; console.error('✗ bank match not found'); } else { await sure.click(); await wait(300); log('✓ bank statement match confirmed'); }
+  if (!(await S(h => AIEC.payConfirmed(AIEC.Store.S.projects[h], 'arrival'), pid))) { fails++; console.error('✗ arrival payment not confirmed'); }
+  await task('u_fin', 'pay_bill'); await fill('ref', 'NEFTKLS901'); await next(); await done('finance pays the supplier');
   await task(tech, 'material_handover'); await click('[data-a=flowDo][data-v=allIn]'); await next(); await photo('ph.stack'); await sign(); await next(); await done('material handed over');
 
   console.log('Installation');

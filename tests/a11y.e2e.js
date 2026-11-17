@@ -6,6 +6,7 @@ const AXE=fs.readFileSync(require.resolve('axe-core/axe.min.js'),'utf8');
 const BASE=process.argv[2]||'http://localhost:8765/';
 (async()=>{
  const b=await chromium.launch(); const p=await (await b.newContext({bypassCSP:true,viewport:{width:400,height:860}})).newPage();
+ const pageErrs=[]; p.on('pageerror',e=>pageErrs.push(e.message)); p.on('console',m=>{if(m.type()==='error')pageErrs.push(m.text())});
  await p.goto(BASE); await p.waitForTimeout(800);
  await p.click('[data-a=setLang][data-v=en]'); await p.click('[data-a=practice]'); await p.waitForTimeout(2500);
  const all={};
@@ -13,12 +14,13 @@ const BASE=process.argv[2]||'http://localhost:8765/';
  await audit('door');
  const login=async uid=>{await p.evaluate(()=>{AIEC.Session.logout();location.hash='#/door'}); await p.waitForTimeout(300); await p.click(`[data-a=pickUser][data-v=${uid}]`); await p.waitForTimeout(200); await audit('login'); for(let i=0;i<4;i++) await p.click('[data-a=pinKey][data-v="1"]'); await p.waitForTimeout(400);};
  const go=async (h,name)=>{await p.evaluate(h=>{location.hash=h;AIEC.App.render()},h); await p.waitForTimeout(400); await audit(name);};
- await login('u_hq'); await audit('home-hq'); await go('#/jobs','jobs'); await go('#/job/PUN-P014','job'); await go('#/job/PUN-P014/money','job-money'); await go('#/job/PUN-P007/chat','chat'); await go('#/dash','dash'); await go('#/people','people'); await go('#/rules','rules'); await go('#/me','me'); await go('#/pay','pay-office'); await go('#/pay/u_tech1','pay-person'); await go('#/flow/RELEASE/PUN-P011','flow-release'); await go('#/doc/quote/PUN-P006','doc');
+ await login('u_hq'); await audit('home-hq'); await go('#/jobs','jobs'); await go('#/job/PUN-P014','job'); await go('#/job/PUN-P014/money','job-money'); await go('#/job/PUN-P007/chat','chat'); await go('#/dash','dash'); await go('#/people','people'); await go('#/rules','rules'); await go('#/me','me'); await go('#/pay','pay-office'); await go('#/bank','bank'); await go('#/flow/BILL_DECIDE/PUN-P013','flow-bill'); await go('#/pay/u_tech1','pay-person'); await go('#/flow/RELEASE/PUN-P011','flow-release'); await go('#/doc/quote/PUN-P006','doc');
  await login('u_field1'); await go('#/flow/LEAD_CREATE','flow-lead');
  await login('u_qc'); await go('#/flow/QC_SITE/PUN-P010','flow-qc'); await go('#/pay','my-pay');
  await login('u_cust1'); await audit('home-cust'); await go('#/flow/AGREE_SIGN/PUN-P007','flow-agree');
  for(const th of ['dark','sun']){ await p.evaluate(t=>{localStorage.setItem('aiec.theme',JSON.stringify(t));AIEC.App.applyLook();AIEC.App.render()},th); await p.waitForTimeout(300); await audit('home-cust-'+th); }
  for(const [k,v] of Object.entries(all)) console.log(`[${v.impact}] ${k}: ${v.help}\n   on: ${v.screens.join(', ')}\n   e.g. ${v.ex.join('\n        ')}`);
  await b.close();
+ if(pageErrs.length){ console.log('PAGE ERRORS: '+pageErrs.join(' | ')); process.exit(1); }
  if(!Object.keys(all).length) { console.log('NO VIOLATIONS'); process.exit(0); } process.exit(1);
 })();

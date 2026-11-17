@@ -76,7 +76,7 @@
       ])}</div>`);
       out.push(`<div class="card stack"><h3>👥 ${esc(t('team'))}</h3>${kv([[t('r_sales'), person(P.sales)], [t('r_qc'), person(P.qc)], [t('r_tech'), person(P.tech)], [t('r_supplier'), person(P.supplier)], [t('r_customer'), P.customer ? person(P.customer) + ' ' + U.chip(t('has_login'), 'ok') : `<span class="muted">${esc(t('no_login'))}</span>`]])}</div>`);
       if (A.stageIdx(P.stage) >= A.stageIdx('site_ok') && P.stage !== 'lost') {
-        const st = P.statutory || {}, row = k => { const x = st[k]; return [t('stat_title_' + k), x ? `✅ <span class="mono">${esc(x.no)}</span>${x.expiry ? ' · ' + esc(t('valid_till', { d: U.fmtD(x.expiry) })) : ''}${x.doc ? ` <button type="button" class="link-btn" data-a="viewPhoto" data-v="${esc(x.doc)}">📄</button>` : ''}` : `<span class="muted">${esc(t('not_yet'))}</span>`]; };
+        const st = P.statutory || {}, row = k => { const x = st[k]; return [t('stat_title_' + k), x ? `✅ <span class="mono">${esc(x.no)}</span>${x.expiry ? ' · ' + esc(t('valid_till', { d: U.fmtD(x.expiry) })) : ''}${x.doc ? ` <button type="button" class="link-btn" data-a="viewPhoto" data-v="${esc(x.doc)}" aria-label="${esc(t('open_photo'))}">📄</button>` : ''}` : `<span class="muted">${esc(t('not_yet'))}</span>`]; };
         out.push(`<div class="card stack"><h3>⚖️ ${esc(t('stat_papers'))}</h3>${kv([row('permit'), row('licence')])}</div>`);
       }
       if (P.stage === 'installing' || P.sop.length) {
@@ -84,6 +84,7 @@
         out.push(`<div class="card stack"><div class="card-head"><h3>🔧 ${esc(t('install_progress'))}</h3><span class="chip info">${n}/${A.SOP.length}</span></div><div class="steps-dots" aria-hidden="true">${A.SOP.map((s, i) => `<i class="${P.sop[i] ? 'done' : i === n ? 'on' : ''}"></i>`).join('')}</div>
           <ol class="small" style="margin:0;padding-left:20px">${A.SOP.map(([k, em], i) => `<li style="color:${P.sop[i] ? 'var(--ok)' : 'inherit'}">${em} ${esc(t('sop_' + k))}${P.sop[i] ? ' ✓' + (P.sop[i].reading != null ? ` <span class="muted">(${P.sop[i].reading} ${esc(A.SOP_READ[i].unit)})</span>` : '') : ''}</li>`).join('')}</ol></div>`);
       }
+      if (P.bills.length && (A.seesMargin(u.role) || u.role === 'supplier')) out.push(`<div class="stack"><h2 class="h3" style="margin:4px 2px">🧾 ${esc(t('supplier_bill'))}</h2>${P.bills.slice().reverse().map(b => A.billCard(P, b).replace('<div class="card stack">', `<div class="card stack"><div>${U.chip(t('bs_' + b.status), b.status === 'paid' ? 'ok' : b.status === 'rejected' ? 'bad' : 'warn')}</div>`)).join('')}</div>`);
       if (P.corrections.length) out.push(`<div class="card stack"><h3>🛠️ ${esc(t('corrections'))}</h3><div class="list">${P.corrections.map(c => `<div class="row-flex">${c.done ? '✅' : '⬜'} <span>${esc(t(c.k, c.v))}</span><span class="spacer"></span>${c.done ? `<span class="muted tiny">${esc(U.fmtD(c.done.t))}</span>` : ''}</div>`).join('')}</div></div>`);
       if (P.po) out.push(`<div class="card stack"><h3>📦 ${esc(t('material'))} · <span class="mono small">${esc(P.po.no)}</span></h3>${kv([[t('drawing'), esc(P.po.drawing)], [t('need_by'), esc(U.fmtD(P.po.needBy))], [t('dispatch_date'), P.po.accepted ? esc(U.fmtD(P.po.accepted.date)) : ''], [t('vehicle'), P.dispatch ? esc(P.dispatch.vehicle) : ''], [t('arrived_on'), P.arrival ? esc(U.fmtDT(P.arrival.t)) : ''], [t('received_by'), P.mhand ? esc(P.mhand.receiver) : '']])}
         <details class="fold"><summary>${esc(t('material_list'))} (${P.po.items.length})</summary><div class="in"><table class="money">${P.po.items.map(m => `<tr><td>${esc(t(m.k))}</td><td>${m.q}</td></tr>`).join('')}</table></div></details></div>`);
@@ -225,6 +226,28 @@
     return { title: uid === u.uid ? t('my_pay') : U.userName(uid), sub: t('work_pay'), back: office ? '/pay' : '/home', body };
   };
 
+  /* ---------- bank statement matching (Finance): suggestions, a person confirms each ---------- */
+  let bankText = '';
+  Screens.bank = ({ S, u }) => {
+    if (!A.actsAs(S, u, ['finance', 'owner'])) return { redirect: '/home' };
+    const m = bankText ? A.bankMatch(S, bankText) : null;
+    const pending = Object.values(S.projects).reduce((a, P) => a + P.payments.filter(p => p.status === 'pending').length, 0);
+    const body = `<div class="stack-l">${U.banner('🏦', esc(t('bank_intro', { n: pending })))}
+      <div class="card stack">${U.field(t('bank_paste'), `<textarea id="bank-text" rows="6" placeholder="17/11/2026, UPI/UTR4455661/…, 10,000.00" aria-label="${esc(t('bank_paste'))}">${esc(bankText)}</textarea>`, { hint: t('bank_hint') })}
+        <div class="grid2"><button class="btn" type="button" data-a="bankFile">📂 ${esc(t('bank_file'))}</button><button class="btn primary" type="button" data-a="bankRun">🔎 ${esc(t('bank_find'))}</button></div></div>
+      ${m ? `<section class="stack"><div class="section-title"><h2>${esc(t('bank_matches'))}</h2><span class="count">${m.matches.length} / ${m.lines}</span></div>
+        ${m.matches.map(x => { const P = S.projects[x.pid]; return `<div class="card stack"><div class="row-flex">${x.sure ? U.chip(t('bank_sure'), 'ok') : U.chip(t('bank_likely'), 'warn')}<span class="spacer"></span><b class="num">${U.money(x.amount)}</b></div><p><b>${esc(P.id)}</b> · ${esc(P.lead.name)} · ${esc(t('pay_' + P.payments.find(p => p.id === x.payId).purpose))} · <span class="mono">${esc(x.ref)}</span></p><p class="small muted mono">${esc(x.line)}</p><button class="btn ok block" type="button" data-a="bankConfirm" data-pid="${esc(x.pid)}" data-v="${esc(x.payId)}">✓ ${esc(t('found_in_bank'))}</button></div>`; }).join('') || `<div class="card">${U.empty('🔎', t('bank_none'))}</div>`}
+        ${m.unmatched.length ? `<details class="fold"><summary>${esc(t('bank_unmatched'))} (${m.unmatched.length})</summary><div class="in"><pre class="small mono" style="white-space:pre-wrap;margin:0">${esc(m.unmatched.join('\n'))}</pre></div></details>` : ''}</section>` : ''}
+      <p class="small muted">${esc(t('verify_rule'))}</p></div>`;
+    return { title: t('match_bank'), back: '/dash', body,
+      after(root) { const ta = root.querySelector('#bank-text'); if (ta) ta.addEventListener('input', () => { bankText = ta.value; }); } };
+  };
+  Object.assign(Actions, {
+    bankRun: () => { const ta = document.getElementById('bank-text'); bankText = ta ? ta.value : ''; if (!bankText.trim()) return U.toast(t('bank_empty'), 'bad'); A.App.render(); },
+    bankFile: async () => { const txt = await U.pickFile('.csv,.txt,text/csv,text/plain'); if (txt) { bankText = txt; A.App.render(); } },
+    bankConfirm: async el => { await dispatch('PAY_VERIFY', el.dataset.pid, { payId: el.dataset.v, ok: true }, t('what_pay_ok')); }
+  });
+
   /* ---------- customer chat inbox ---------- */
   Screens.chat = ({ S, u }) => {
     const Ps = A.visibleProjects(S, u);
@@ -357,7 +380,8 @@
         <div class="kpi"><div class="v">${d.open}</div><div class="l">${esc(t('kpi_open'))}</div></div>
         <div class="kpi"><div class="v">${d.wonCount} · ${U.moneyShort(d.wonValue)}</div><div class="l">${esc(t('kpi_won_month'))}</div></div>
         <div class="kpi"><div class="v">${U.moneyShort(d.received)}</div><div class="l">${esc(t('kpi_received'))}</div></div>
-        <div class="kpi"><div class="v">${U.moneyShort(d.pending)}</div><div class="l">${esc(t('kpi_pending'))}</div></div>
+        <a class="kpi" href="#/bank" style="text-decoration:none;color:inherit"><div class="v">${U.moneyShort(d.pending)}</div><div class="l">${esc(t('kpi_pending'))} · 🏦</div></a>
+        <div class="kpi"><div class="v">${U.moneyShort(d.billsDue)}</div><div class="l">${esc(t('kpi_bills_due'))}</div></div>
         <div class="kpi"><div class="v">${U.moneyShort(d.pipeline)}</div><div class="l">${esc(t('kpi_pipeline'))}</div></div>
         <div class="kpi"><div class="v">${d.winRate}%</div><div class="l">${esc(t('kpi_winrate'))}</div></div>
         <div class="kpi"><div class="v">${d.amc}</div><div class="l">${esc(t('kpi_amc'))}</div></div>
@@ -365,7 +389,7 @@
       </div>
       <div class="card stack"><h2 class="h3">🛗 ${esc(t('where_jobs_are'))}</h2><div class="bars">${d.byPhase.map(x => `<a class="b" href="#/jobs?f=${A.PHASES.findIndex(p => p[0] === x.ph)}" style="color:inherit;text-decoration:none"><span>${esc(t('ph_' + x.ph))}</span><span class="t"><i style="width:${Math.round(x.n / max * 100)}%"></i></span><b class="num right">${x.n}</b></a>`).join('')}</div></div>
       <section class="stack"><div class="section-title"><h2>⏫ ${esc(t('stuck_work'))}</h2><span class="count">${stuck.length}</span></div>${stuck.length ? `<div class="list">${stuck.slice(0, 20).map(k => A.taskRow(k, S, { showWho: true, role: u.role })).join('')}</div>` : `<div class="card">${U.empty('🎉', t('nothing_stuck'))}</div>`}<p class="muted small">${esc(t('stuck_rule', { n: S.config.escalateDays }))}</p></section>
-      ${pend.length ? `<section class="stack"><div class="section-title"><h2>🏦 ${esc(t('payments_to_check'))}</h2><span class="count">${pend.length}</span></div><div class="list">${pend.map(({ P, p }) => `<a class="row" href="#/flow/PAY_VERIFY/${esc(P.id)}?pay=${esc(p.id)}"><span class="ico">🏦</span><span class="body"><span class="title">${U.money(p.amount)} · ${esc(t('pay_' + p.purpose))}</span><div class="sub">${esc(P.id)} · ${esc(P.lead.name)} · ${esc(U.ago(p.t))}</div></span><span class="chev">›</span></a>`).join('')}</div></section>` : ''}
+      ${pend.length ? `<section class="stack"><div class="section-title"><h2>🏦 ${esc(t('payments_to_check'))}</h2><span class="count">${pend.length}</span><span class="spacer"></span><a class="link-btn" href="#/bank">🏦 ${esc(t('bank_find'))}</a></div><div class="list">${pend.map(({ P, p }) => `<a class="row" href="#/flow/PAY_VERIFY/${esc(P.id)}?pay=${esc(p.id)}"><span class="ico">🏦</span><span class="body"><span class="title">${U.money(p.amount)} · ${esc(t('pay_' + p.purpose))}</span><div class="sub">${esc(P.id)} · ${esc(P.lead.name)} · ${esc(U.ago(p.t))}</div></span><span class="chev">›</span></a>`).join('')}</div></section>` : ''}
       ${reasons.length ? `<div class="card stack"><h2 class="h3">❌ ${esc(t('why_lost'))}</h2><div class="bars">${reasons.map(([k, n]) => `<div class="b"><span>${esc(t(k))}</span><span class="t"><i style="width:${Math.round(n / lost.length * 100)}%;background:var(--bad)"></i></span><b class="num right">${n}</b></div>`).join('')}</div></div>` : ''}
     </div>`;
     return { title: t('nav_dash'), sub: S.org.name, body, wide: true };
@@ -388,6 +412,7 @@
       <section class="list">
         ${office ? `<a class="row" href="#/people"><span class="ico">👥</span><span class="body"><span class="title">${esc(t('nav_people'))}</span></span><span class="chev">›</span></a><a class="row" href="#/rules"><span class="ico">⚙️</span><span class="body"><span class="title">${esc(t('nav_rules'))}</span><div class="sub">${esc(t(u.role === 'owner' ? 'rules_d' : 'rules_owner_only'))}</div></span><span class="chev">›</span></a>` : ''}
         ${['tech', 'qc'].includes(u.role) ? `<a class="row" href="#/pay"><span class="ico">💰</span><span class="body"><span class="title">${esc(t('my_pay'))}</span></span><span class="chev">›</span></a>` : office || u.role === 'finance' ? `<a class="row" href="#/pay"><span class="ico">💰</span><span class="body"><span class="title">${esc(t('work_pay'))}</span><div class="sub">${esc(t('work_pay_d'))}</div></span><span class="chev">›</span></a>` : ''}
+        ${A.actsAs(S, u, ['finance', 'owner']) ? `<a class="row" href="#/bank"><span class="ico">🏦</span><span class="body"><span class="title">${esc(t('match_bank'))}</span><div class="sub">${esc(t('match_bank_d'))}</div></span><span class="chev">›</span></a>` : ''}
         <button class="row" type="button" data-a="changePin"><span class="ico">🔐</span><span class="body"><span class="title">${esc(t('change_pin'))}</span></span><span class="chev">›</span></button>
         <button class="row" type="button" data-a="exportData"><span class="ico">📤</span><span class="body"><span class="title">${esc(t('share_data'))}</span><div class="sub">${esc(t('share_data_d'))}</div></span><span class="chev">›</span></button>
         <button class="row" type="button" data-a="importFile"><span class="ico">📂</span><span class="body"><span class="title">${esc(t('open_file'))}</span><div class="sub">${esc(t('open_file_d'))}</div></span><span class="chev">›</span></button>
@@ -398,7 +423,7 @@
         <button class="btn block dark" type="button" data-a="logout">🚪 ${esc(t('logout'))}</button>
         ${A.Store.mode === 'practice' ? `<button class="btn block" type="button" data-a="exitPractice">🎓 ${esc(t('exit_practice'))}</button>` : ''}
       </div>
-      <p class="muted tiny center">AIEC Elevator OS · ${esc(t('version'))} 2.2 · ${esc(t('autosaved'))}</p>
+      <p class="muted tiny center">AIEC Elevator OS · ${esc(t('version'))} 2.3 · ${esc(t('autosaved'))}</p>
     </div>`;
     return { title: t('me'), body };
   };
@@ -419,8 +444,12 @@
     },
     exportData: async () => {
       const f = await A.Store.exportFile();
-      const name = `aiec-${A.Store.mode}-${A.todayStr()}.json`;
-      U.download(name, JSON.stringify(f));
+      const name = `aiec-${A.Store.mode}-${A.todayStr()}.json`, text = JSON.stringify(f);
+      try {
+        const file = new File([text], name, { type: 'application/json' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name, text: t('share_file_text') }); U.toast(t('shared_ok'), 'ok'); return; }
+      } catch (e) { if (e && e.name === 'AbortError') return; }
+      U.download(name, text);
       U.toast(t('file_saved', { name }), 'ok');
     }
   });

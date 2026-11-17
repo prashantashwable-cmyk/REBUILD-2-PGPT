@@ -27,9 +27,9 @@
     ['Mr. Iyer', '9822100010', 'Kalyani Nagar', 'Iyer House', 4, 'qc_site', 2, {}],
     ['Mr. Naik', '9822100011', 'Pashan', 'Naik Enclave', 5, 'site_ok', 4, {}],
     ['Mrs. Mehta', '9822100012', 'Kondhwa', 'Mehta Apartments', 6, 'material_order', 3, { hold: true }],
-    ['Mr. Sawant', '9822100013', 'Warje', 'Sawant Niwas', 4, 'arrived', 2, {}],
-    ['Mr. Kadam', '9822100014', 'Sinhagad Road', 'Kadam Heights', 5, 'installing', 3, { steps: 4, tech: 'u_tech1' }],
-    ['Mr. Patwardhan', '9822100015', 'Erandwane', 'Patwardhan Wada', 3, 'qc_final', 1, { tech: 'u_tech2' }],
+    ['Mr. Sawant', '9822100013', 'Warje', 'Sawant Niwas', 4, 'arrived', 2, { bill: 'submitted' }],
+    ['Mr. Kadam', '9822100014', 'Sinhagad Road', 'Kadam Heights', 5, 'installing', 3, { steps: 4, tech: 'u_tech1', bill: 'paid' }],
+    ['Mr. Patwardhan', '9822100015', 'Erandwane', 'Patwardhan Wada', 3, 'qc_final', 1, { tech: 'u_tech2', bill: 'approved' }],
     ['Mrs. Gokhale', '9822100016', 'Deccan', 'Gokhale Mansion', 4, 'handover', 1, { tech: 'u_tech1', signed: ['tech'] }],
     ['Mr. Apte', '9822100017', 'Sadashiv Peth', 'Apte Residency', 4, 'amc', 40, { tech: 'u_tech1', ticket: true, cust: 'u_cust3' }],
     ['Mr. Lele', '9822100018', 'Bibwewadi', 'Lele Bungalow', 2, 'lost', 12, {}]
@@ -106,7 +106,7 @@
         } else if (st === 'qc_site') run('u_qc', 'QC_SITE', pid, { checks: Object.fromEntries(A.QC_SITE_CHECKS.map(k => [k, 'pass'])), meas: { width: 1650, depth: 1600, pit: 1400, head: 4000 }, photos: [photo[2]] });
         else if (st === 'site_ok') { if (!p.statutory.permit) run('u_admin', 'STAT_RECORD', pid, { kind: 'permit', no: 'EP/PUN/26/' + (100 + i), date: A.todayStr(new Date(clock)), authority: 'Lift Inspector, Pune', doc: photo[2] }); run('u_admin', 'RELEASE', pid, { tech: o.tech || (i % 2 ? 'u_tech2' : 'u_tech1'), supplier: 'u_sup', drawing: 'DWG-P' + (i + 1) + '-R1', needBy: A.addDays(10, new Date(clock)) }); }
         else if (st === 'material_order') {
-          if (!p.po.accepted) run('u_sup', 'PO_ACCEPT', pid, { date: A.addDays(2, new Date(clock)) });
+          if (!p.po.accepted) run('u_sup', 'PO_ACCEPT', pid, { date: A.todayStr(new Date(clock)) });
           else run('u_sup', 'DISPATCH', pid, { vehicle: 'MH12AB' + (1000 + i), driver: 'Rajesh', photos: [photo[3]] });
         } else if (st === 'dispatched') run(p.tech, 'ARRIVAL', pid, { photos: [photo[3]], sealOk: true });
         else if (st === 'arrived') {
@@ -133,6 +133,12 @@
           if (!A.licenceOk(P(), new Date(clock).toISOString())) run('u_admin', 'STAT_RECORD', pid, { kind: 'licence', no: 'LIC/PUN/26/' + (500 + i), date: A.todayStr(new Date(clock)), expiry: A.addDays(365, new Date(clock)), authority: 'Lift Inspector, Pune', doc: photo[2] });
           run('u_admin', 'HAND_COMPLETE', pid);
         } else break;
+      }
+      if (o.bill) {
+        run('u_sup', 'BILL_SUBMIT', pid, { no: 'KLS/26/' + (300 + i), amount: 380000 + i * 5000, doc: photo[3] });
+        const b = () => P().bills[P().bills.length - 1];
+        if (o.bill !== 'submitted') run('u_admin', 'BILL_DECIDE', pid, { bid: b().id, ok: true, deduction: o.bill === 'approved' ? 2500 : 0, note: o.bill === 'approved' ? 'Two button panels short' : '' });
+        if (o.bill === 'paid') run('u_fin', 'BILL_PAY', pid, { bid: b().id, ref: 'NEFTKLS' + (300 + i) });
       }
       if (o.hold) run('u_admin', 'HOLD_START', pid, { reason: 'supplier', note: 'Controller panel stock arrives next week.' });
       if (o.ticket) { clock = Date.now() - 3 * 3600e3; run(o.cust || 'u_sales', 'TICKET_OPEN', pid, { kind: 'breakdown', severity: 'breakdown', text: 'Lift door does not close fully on 2nd floor.' }); }
