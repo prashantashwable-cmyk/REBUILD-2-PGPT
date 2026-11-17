@@ -1,0 +1,16 @@
+{
+  "name": "AIEC Elevator OS",
+  "short_name": "AIEC OS",
+  "description": "Lead to handover work manager for lift companies. Works offline.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#23262f",
+  "theme_color": "#23262f",
+  "lang": "mr",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
